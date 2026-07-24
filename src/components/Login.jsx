@@ -34,7 +34,7 @@ export default function Login({ onLoginSuccess, isSupabaseConnected }) {
           .select('*')
           .eq('username', username.trim())
           .eq('password', password.trim())
-          .single();
+          .maybeSingle();
 
         if (dbError || !data) {
           throw new Error('არასწორი მომხმარებელი ან პაროლი');
@@ -120,20 +120,6 @@ export default function Login({ onLoginSuccess, isSupabaseConnected }) {
             {loading ? 'მიმდინარეობს შესვლა...' : 'ავტორიზაცია'}
           </button>
         </form>
-
-        {showDemoHelp && (
-          <div className="demo-credentials-box">
-            <div className="demo-help-header" onClick={() => setShowDemoHelp(!showDemoHelp)}>
-              <HelpCircle size={14} className="margin-right-xs text-volt" />
-              <span>სადემონსტრაციო იუზერები ტესტირებისთვის</span>
-            </div>
-            <div className="demo-users-list">
-              <p>🔑 <strong>სუპერ ადმინი:</strong> <code>admin</code> / <code>admin123</code></p>
-              <p>🔑 <strong>მენეჯერი:</strong> <code>manager</code> / <code>manager123</code></p>
-              <p>🔑 <strong>თანამშრომელი:</strong> <code>staff</code> / <code>staff123</code></p>
-            </div>
-          </div>
-        )}
       </div>
 
       <style>{`
