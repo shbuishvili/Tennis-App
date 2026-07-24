@@ -51,7 +51,7 @@ export default function BookingModal({
   const [startDate, setStartDate] = useState('');
   const [startTime, setStartTime] = useState('');
   const [duration, setDuration] = useState(1); // in hours: 1, 1.5, 2
-  const [racketsStatus, setRacketsStatus] = useState('excluded');
+  const [racketsStatus, setRacketsStatus] = useState('included');
   const [isBlocked, setIsBlocked] = useState(false);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
@@ -72,7 +72,11 @@ export default function BookingModal({
       }
       const diffMs = new Date(existingBooking.end_time) - new Date(existingBooking.start_time);
       setDuration(diffMs / 3600000 || 1);
-      setRacketsStatus(existingBooking.rackets_status || 'excluded');
+      
+      // Convert old DB value 'excluded' to 'rented' for UI, otherwise use DB value
+      const status = existingBooking.rackets_status || 'included';
+      setRacketsStatus(status === 'excluded' ? 'rented' : status);
+      
       setIsBlocked(existingBooking.is_blocked || false);
       setNotes(existingBooking.notes || '');
     } else {
@@ -89,7 +93,7 @@ export default function BookingModal({
         setStartTime(toInputTime(ge));
       }
       setDuration(1);
-      setRacketsStatus('excluded');
+      setRacketsStatus('included');
       setIsBlocked(false);
       setNotes('');
     }
@@ -127,7 +131,7 @@ export default function BookingModal({
       room_number: isBlocked ? 'BLOCKED' : roomNumber.trim(),
       start_time: startISO,
       end_time: endISO,
-      rackets_status: isBlocked ? 'excluded' : racketsStatus,
+      rackets_status: isBlocked ? 'included' : racketsStatus,
       is_blocked: isBlocked,
       notes: notes
     };
@@ -235,14 +239,14 @@ export default function BookingModal({
                     className={`rackets-toggle-btn included ${racketsStatus === 'included' ? 'active' : ''}`}
                     onClick={() => setRacketsStatus('included')}
                   >
-                    🎾 Included (ფასში შედის)
+                    🎾 Included (თავისი აქვთ)
                   </button>
                   <button
                     type="button"
-                    className={`rackets-toggle-btn excluded ${racketsStatus === 'excluded' ? 'active' : ''}`}
-                    onClick={() => setRacketsStatus('excluded')}
+                    className={`rackets-toggle-btn excluded ${racketsStatus === 'rented' ? 'active' : ''}`}
+                    onClick={() => setRacketsStatus('rented')}
                   >
-                    Excluded (თავისი აქვთ)
+                    Rented (ნაქირავები)
                   </button>
                 </div>
               </div>
