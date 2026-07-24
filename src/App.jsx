@@ -25,6 +25,19 @@ import {
   Key
 } from 'lucide-react';
 
+const DEFAULT_COURTS = [
+  { id: 1, name: 'კორტი 1 (Clay)', type: 'Clay', is_active: true, status: 'active' },
+  { id: 2, name: 'კორტი 2 (Hard)', type: 'Hard', is_active: true, status: 'active' },
+  { id: 3, name: 'კორტი 3 (Clay)', type: 'Clay', is_active: true, status: 'active' },
+  { id: 4, name: 'კორტი 4 (Hard)', type: 'Hard', is_active: true, status: 'active' }
+];
+
+const DEFAULT_SETTINGS = [
+  { day_type: 'weekday', open_time: '08:00', close_time: '22:00', is_active: true },
+  { day_type: 'weekend', open_time: '09:00', close_time: '23:00', is_active: true },
+  { day_type: 'holiday', open_time: '10:00', close_time: '18:00', is_active: true }
+];
+
 const TennisRacketIcon = ({ size = 24, className = "" }) => (
   <svg 
     width={size} 
@@ -47,25 +60,13 @@ const TennisRacketIcon = ({ size = 24, className = "" }) => (
   </svg>
 );
 
-const DEFAULT_COURTS = [
-  { id: 1, name: 'კორტი 1 (Clay)', type: 'Clay', is_active: true, status: 'active' },
-  { id: 2, name: 'კორტი 2 (Hard)', type: 'Hard', is_active: true, status: 'active' },
-  { id: 3, name: 'კორტი 3 (Clay)', type: 'Clay', is_active: true, status: 'active' },
-  { id: 4, name: 'კორტი 4 (Hard)', type: 'Hard', is_active: true, status: 'active' }
-];
-
-const DEFAULT_SETTINGS = [
-  { day_type: 'weekday', open_time: '08:00', close_time: '22:00', is_active: true },
-  { day_type: 'weekend', open_time: '09:00', close_time: '23:00', is_active: true },
-  { day_type: 'holiday', open_time: '10:00', close_time: '18:00', is_active: true }
-];
-
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'calendar', 'customers', 'staff', 'settings', 'profile'
   const [courts, setCourts] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [settings, setSettings] = useState([]);
+  const [courtClosures, setCourtClosures] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
 
@@ -82,6 +83,11 @@ export default function App() {
   // Settings & court creation states
   const [newCourtName, setNewCourtName] = useState('');
   const [newCourtType, setNewCourtType] = useState('Clay');
+
+  // Court closures creation states
+  const [closureCourtId, setClosureCourtId] = useState('');
+  const [closureDate, setClosureDate] = useState('');
+  const [closureReason, setClosureReason] = useState('');
 
   // Change Password state for current user
   const [myOldPassword, setMyOldPassword] = useState('');
@@ -121,6 +127,9 @@ export default function App() {
 
         const { data: dbBookings } = await supabase.from('bookings').select('*');
         setBookings(dbBookings || []);
+
+        const { data: dbClosures } = await supabase.from('court_closures').select('*');
+        setCourtClosures(dbClosures || []);
       } catch (err) {
         console.warn('Supabase loading error, falling back to LocalStorage:', err.message);
         setIsSupabaseConnected(false);
@@ -129,6 +138,7 @@ export default function App() {
         const localCourts = localStorage.getItem('courts');
         const localSettings = localStorage.getItem('court_settings');
         const localBookings = localStorage.getItem('bookings');
+        const localClosures = localStorage.getItem('court_closures');
 
         if (localCourts) setCourts(JSON.parse(localCourts));
         else {
@@ -147,6 +157,12 @@ export default function App() {
           setBookings([]);
           localStorage.setItem('bookings', JSON.stringify([]));
         }
+
+        if (localClosures) setCourtClosures(JSON.parse(localClosures));
+        else {
+          setCourtClosures([]);
+          localStorage.setItem('court_closures', JSON.stringify([]));
+        }
       } finally {
         setLoading(false);
       }
@@ -154,13 +170,13 @@ export default function App() {
     initApp();
   }, []);
 
-  // Real-time synchronization & polling fallback for bookings
+  // Real-time synchronization & polling fallback for bookings & closures
   useEffect(() => {
     let intervalId;
 
     if (isSupabaseConnected) {
-      // 1. Supabase Realtime Subscription
-      const channel = supabase
+      // 1. Supabase Realtime Subscription for bookings
+      const bookingsChannel = supabase
         .channel('realtime-bookings')
         .on(
           'postgres_changes',
@@ -172,23 +188,41 @@ export default function App() {
         )
         .subscribe();
 
-      // 2. Polling fallback (every 15 seconds) just in case Realtime is disabled on the database
+      // 2. Supabase Realtime Subscription for court closures
+      const closuresChannel = supabase
+        .channel('realtime-closures')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'court_closures' },
+          async () => {
+            const { data } = await supabase.from('court_closures').select('*');
+            if (data) setCourtClosures(data);
+          }
+        )
+        .subscribe();
+
+      // 3. Polling fallback (every 15 seconds) just in case Realtime is disabled
       intervalId = setInterval(async () => {
-        const { data } = await supabase.from('bookings').select('*');
-        if (data) setBookings(data);
+        const { data: bData } = await supabase.from('bookings').select('*');
+        if (bData) setBookings(bData);
+        
+        const { data: cData } = await supabase.from('court_closures').select('*');
+        if (cData) setCourtClosures(cData);
       }, 15000);
 
       return () => {
-        supabase.removeChannel(channel);
+        supabase.removeChannel(bookingsChannel);
+        supabase.removeChannel(closuresChannel);
         clearInterval(intervalId);
       };
     } else {
       // LocalStorage mode: check if other tabs made changes (every 5 seconds)
       intervalId = setInterval(() => {
         const localBookings = localStorage.getItem('bookings');
-        if (localBookings) {
-          setBookings(JSON.parse(localBookings));
-        }
+        if (localBookings) setBookings(JSON.parse(localBookings));
+
+        const localClosures = localStorage.getItem('court_closures');
+        if (localClosures) setCourtClosures(JSON.parse(localClosures));
       }, 5000);
 
       return () => clearInterval(intervalId);
@@ -217,6 +251,15 @@ export default function App() {
     setCurrentUser(null);
     sessionStorage.removeItem('tennis_app_user');
     setActiveTab('login');
+  };
+
+  // Helper: check if a court is closed for a specific date
+  const getCourtClosureForDate = (courtId, date) => {
+    const dateStr = date.toDateString();
+    return courtClosures.find(c => {
+      if (c.court_id !== courtId) return false;
+      return new Date(c.closure_date).toDateString() === dateStr;
+    });
   };
 
   // Sync bookings
@@ -412,6 +455,71 @@ export default function App() {
     }
   };
 
+  // Save court closure rule
+  const handleAddClosure = async (e) => {
+    e.preventDefault();
+    if (!closureCourtId || !closureDate || !closureReason.trim()) return;
+
+    setLoading(true);
+    try {
+      const newClosure = {
+        court_id: parseInt(closureCourtId),
+        closure_date: closureDate,
+        reason: closureReason.trim()
+      };
+
+      if (isSupabaseConnected) {
+        const { error } = await supabase
+          .from('court_closures')
+          .insert(newClosure);
+        if (error) throw error;
+
+        // Fetch refreshed closures
+        const { data } = await supabase.from('court_closures').select('*');
+        setCourtClosures(data || []);
+      } else {
+        const updatedClosures = [...courtClosures, { id: Date.now(), ...newClosure }];
+        setCourtClosures(updatedClosures);
+        localStorage.setItem('court_closures', JSON.stringify(updatedClosures));
+      }
+
+      setClosureCourtId('');
+      setClosureDate('');
+      setClosureReason('');
+    } catch (err) {
+      alert('ჩაკეტვის დამატებისას მოხდა შეცდომა (შესაძლოა ეს კორტი ამ თარიღზე უკვე ჩაკეტილია): ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Delete court closure rule
+  const handleDeleteClosure = async (closureId) => {
+    if (!window.confirm('ნამდვილად გსურთ ამ ჩაკეტვის გაუქმება და კორტის გახსნა?')) return;
+
+    setLoading(true);
+    try {
+      if (isSupabaseConnected) {
+        const { error } = await supabase
+          .from('court_closures')
+          .delete()
+          .eq('id', closureId);
+        if (error) throw error;
+
+        const { data } = await supabase.from('court_closures').select('*');
+        setCourtClosures(data || []);
+      } else {
+        const updatedClosures = courtClosures.filter(c => c.id !== closureId);
+        setCourtClosures(updatedClosures);
+        localStorage.setItem('court_closures', JSON.stringify(updatedClosures));
+      }
+    } catch (err) {
+      alert('ჩაკეტვის გაუქმებისას მოხდა შეცდომა: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Change self password helper
   const handleChangePassword = async (e) => {
     e.preventDefault();
@@ -523,7 +631,8 @@ export default function App() {
     // Court occupancy
     const hours = getOperatingHours(selectedDate);
     const slots = generateTimeSlots(hours.open, hours.close);
-    const totalSlotsPossible = slots.length * courts.filter(c => c.status === 'active').length;
+    const activeCourts = courts.filter(c => c.status !== 'maintenance' && !getCourtClosureForDate(c.id, selectedDate));
+    const totalSlotsPossible = slots.length * activeCourts.length;
     
     let occupiedSlotsCount = 0;
     todayBookings.forEach(b => {
@@ -538,7 +647,7 @@ export default function App() {
       ? Math.min(Math.round((occupiedSlotsCount / totalSlotsPossible) * 100), 100) 
       : 0;
 
-    const activeCourtsCount = courts.filter(c => c.status === 'active').length;
+    const activeCourtsCount = activeCourts.length;
 
     return {
       activeBookings: activeBookingsCount,
@@ -570,10 +679,10 @@ export default function App() {
     });
   };
 
-  const handleSlotClick = (courtId, timeSlot, courtStatus) => {
-    // If the court is in maintenance, prevent bookings
-    if (courtStatus === 'maintenance') {
-      alert('ეს კორტი დაკეტილია სარემონტო სამუშაოების გამო!');
+  const handleSlotClick = (courtId, timeSlot, courtStatus, closure) => {
+    // If the court is in maintenance or closed for date, prevent bookings
+    if (courtStatus === 'maintenance' || closure) {
+      alert(`ეს კორტი დაკეტილია: ${closure ? closure.reason : 'სარემონტო სამუშაოების გამო'}!`);
       return;
     }
 
@@ -785,16 +894,38 @@ export default function App() {
               className="btn btn-primary"
               onClick={() => {
                 setSelectedBooking(null);
+                
+                // Snapping current time to nearest 30-min interval on the selected calendar date
+                const now = new Date();
+                const snappedTime = new Date(selectedDate);
+                snappedTime.setHours(now.getHours());
+                const mins = now.getMinutes();
+                if (mins < 15) snappedTime.setMinutes(0, 0, 0);
+                else if (mins < 45) snappedTime.setMinutes(30, 0, 0);
+                else {
+                  snappedTime.setHours(now.getHours() + 1);
+                  snappedTime.setMinutes(0, 0, 0);
+                }
+
                 setSelectedSlot({ 
                   courtId: courts[0]?.id || 1, 
                   courtName: courts[0]?.name || 'კორტი 1', 
-                  time: new Date().toISOString() 
+                  time: snappedTime.toISOString() 
                 });
                 setIsModalOpen(true);
               }}
             >
               <Plus size={18} />
               <span>ახალი ჯავშანი</span>
+            </button>
+
+            {/* Mobile-only logout button */}
+            <button 
+              className="btn btn-danger btn-xs mobile-logout-header-btn"
+              onClick={handleSignOut}
+              title="გასვლა"
+            >
+              <LogOut size={16} />
             </button>
           </div>
         </header>
@@ -960,15 +1091,19 @@ export default function App() {
             <div className="calendar-view animate-fade-in">
               {/* Mobile Court Selector Tabs (Slide 3/10) */}
               <div className="mobile-court-tabs">
-                {courts.map(court => (
-                  <button
-                    key={court.id}
-                    className={`mobile-court-tab-btn ${court.type === 'Clay' ? 'clay' : 'hard'} ${court.status === 'maintenance' ? 'maintenance-tab' : ''} ${selectedCourtMobile === court.id ? 'active' : ''}`}
-                    onClick={() => setSelectedCourtMobile(court.id)}
-                  >
-                    {court.status === 'maintenance' ? `🛠️ ${court.name}` : court.name}
-                  </button>
-                ))}
+                {courts.map(court => {
+                  const closure = getCourtClosureForDate(court.id, selectedDate);
+                  const isClosed = court.status === 'maintenance' || closure;
+                  return (
+                    <button
+                      key={court.id}
+                      className={`mobile-court-tab-btn ${court.type === 'Clay' ? 'clay' : 'hard'} ${isClosed ? 'maintenance-tab' : ''} ${selectedCourtMobile === court.id ? 'active' : ''}`}
+                      onClick={() => setSelectedCourtMobile(court.id)}
+                    >
+                      {isClosed ? `🛠️ ${court.name}` : court.name}
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Grid / Calendar Scheduler */}
@@ -978,17 +1113,21 @@ export default function App() {
                   
                   {/* Desktop columns list (dynamic court count side-by-side) */}
                   <div className="scheduler-courts-header-row" style={{ gridTemplateColumns: `repeat(${courts.length}, 1fr)` }}>
-                    {courts.map(court => (
-                      <div 
-                        key={court.id} 
-                        className={`scheduler-court-column-header court-header-lines ${court.type === 'Clay' ? 'clay' : 'hard'} ${court.status === 'maintenance' ? 'in-maintenance-header' : ''} ${selectedCourtMobile === court.id ? 'mobile-visible' : 'mobile-hidden'}`}
-                      >
-                        <div className="court-type-indicator">
-                          {court.status === 'maintenance' ? '🛠️ რემონტი' : (court.type === 'Clay' ? '🧱 Clay' : '🔵 Hard')}
+                    {courts.map(court => {
+                      const closure = getCourtClosureForDate(court.id, selectedDate);
+                      const isClosed = court.status === 'maintenance' || closure;
+                      return (
+                        <div 
+                          key={court.id} 
+                          className={`scheduler-court-column-header court-header-lines ${court.type === 'Clay' ? 'clay' : 'hard'} ${isClosed ? 'in-maintenance-header' : ''} ${selectedCourtMobile === court.id ? 'mobile-visible' : 'mobile-hidden'}`}
+                        >
+                          <div className="court-type-indicator">
+                            {isClosed ? `🛠️ ${closure ? closure.reason : 'რემონტი'}` : (court.type === 'Clay' ? '🧱 Clay' : '🔵 Hard')}
+                          </div>
+                          <h4>{court.name}</h4>
                         </div>
-                        <h4>{court.name}</h4>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -1000,18 +1139,20 @@ export default function App() {
                       <div className="scheduler-row-cells" style={{ gridTemplateColumns: `repeat(${courts.length}, 1fr)` }}>
                         {courts.map(court => {
                           const isMobileActive = selectedCourtMobile === court.id;
+                          const closure = getCourtClosureForDate(court.id, selectedDate);
                           
-                          // If court is in maintenance, render blocked cell
-                          if (court.status === 'maintenance') {
+                          // If court is in maintenance or closed for date, render blocked cell
+                          if (court.status === 'maintenance' || closure) {
+                            const blockReason = closure ? closure.reason : 'დაკეტილია';
                             return (
                               <div
                                 key={`${court.id}_${time}`}
                                 className={`scheduler-grid-cell cell-maintenance ${isMobileActive ? 'mobile-visible' : 'mobile-hidden'}`}
-                                onClick={() => handleSlotClick(court.id, time, court.status)}
+                                onClick={() => handleSlotClick(court.id, time, court.status, closure)}
                               >
                                 <span className="maintenance-cell-txt">
                                   <Hammer size={12} className="margin-right-xs text-danger" />
-                                  დაკეტილია
+                                  {blockReason}
                                 </span>
                               </div>
                             );
@@ -1032,7 +1173,7 @@ export default function App() {
                           return (
                             <div 
                               key={`${court.id}_${time}`} 
-                              onClick={() => handleSlotClick(court.id, time, court.status)}
+                              onClick={() => handleSlotClick(court.id, time, court.status, closure)}
                               className={`scheduler-grid-cell ${court.type === 'Clay' ? 'cell-clay' : 'cell-hard'} ${booking ? 'occupied' : 'empty'} ${booking?.is_blocked ? 'blocked' : ''} ${isMobileActive ? 'mobile-visible' : 'mobile-hidden'}`}
                             >
                               {booking ? (
@@ -1268,6 +1409,73 @@ export default function App() {
                     ))}
                   </div>
                 </div>
+
+                {/* Court Closures by Date */}
+                <div className="settings-card glass-panel margin-top-md">
+                  <h3>კორტების ჩაკეტვა თარიღებით</h3>
+                  <p className="text-xs text-secondary margin-bottom-md">ჩაკეტეთ კორტი კონკრეტულ თარიღზე ღონისძიების ან ტურნირის გამო</p>
+                  
+                  {/* Add Closure form */}
+                  <form onSubmit={handleAddClosure} className="add-court-form margin-bottom-md flex-align">
+                    <select
+                      className="form-input select-court-type text-sm"
+                      value={closureCourtId}
+                      onChange={(e) => setClosureCourtId(e.target.value)}
+                      required
+                    >
+                      <option value="">აირჩიეთ კორტი</option>
+                      {courts.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <input 
+                      type="date" 
+                      className="form-input text-sm"
+                      value={closureDate}
+                      onChange={(e) => setClosureDate(e.target.value)}
+                      required
+                    />
+                    <input 
+                      type="text" 
+                      className="form-input text-sm"
+                      value={closureReason}
+                      onChange={(e) => setClosureReason(e.target.value)}
+                      placeholder="მიზეზი (მაგ. ტურნირი)"
+                      required
+                    />
+                    <button type="submit" className="btn btn-primary btn-xs">
+                      ჩაკეტვა
+                    </button>
+                  </form>
+
+                  {/* Closures list */}
+                  <div className="courts-edit-list" style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                    {courtClosures.length === 0 ? (
+                      <p className="text-xs text-muted padding-xs">აქტიური ჩაკეტვები არ არის</p>
+                    ) : (
+                      courtClosures.map(closure => {
+                        const court = courts.find(c => c.id === parseInt(closure.court_id));
+                        const formattedDate = new Date(closure.closure_date).toLocaleDateString('ka-GE', { month: 'short', day: 'numeric', year: 'numeric' });
+                        return (
+                          <div key={closure.id} className="court-edit-item glass-panel">
+                            <div className="court-details-col">
+                              <strong>{court ? court.name : `კორტი ${closure.court_id}`}</strong>
+                              <span className="text-xs text-secondary">{formattedDate} — {closure.reason}</span>
+                            </div>
+                            <div className="court-edit-actions">
+                              <button 
+                                className="btn btn-danger btn-xs flex-align btn-delete-court"
+                                onClick={() => handleDeleteClosure(closure.id)}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -1412,6 +1620,10 @@ export default function App() {
 
         .btn-delete-court {
           padding: 6px;
+        }
+
+        .padding-xs {
+          padding: 10px;
         }
 
         /* Profile Password View */
@@ -1562,6 +1774,11 @@ export default function App() {
         .tab-view-container {
           padding: 24px;
           flex: 1;
+        }
+
+        /* Mobile logout btn in header */
+        .mobile-logout-header-btn {
+          display: none !important;
         }
 
         /* 1. Dashboard Styles */
@@ -2124,9 +2341,11 @@ export default function App() {
 
         /* Responsive Design */
         @media (max-width: 900px) {
+          /* Prevent zoom on iPhone by enforcing 16px inputs */
           input, select, textarea {
             font-size: 16px !important;
           }
+
           .app-container {
             flex-direction: column;
           }
@@ -2174,10 +2393,18 @@ export default function App() {
             flex-direction: column;
             gap: 16px;
             align-items: flex-start;
+            padding: 16px 20px;
           }
           .header-actions {
             width: 100%;
             justify-content: space-between;
+            gap: 10px;
+          }
+
+          /* Mobile logout btn in header actions list on mobile */
+          .mobile-logout-header-btn {
+            display: inline-flex !important;
+            padding: 8px 12px;
           }
 
           .dashboard-main-row {
@@ -2244,6 +2471,15 @@ export default function App() {
           }
           .scheduler-grid-cell.mobile-visible {
             border-right: none;
+          }
+
+          /* Optimize cell sizes for tall devices (iPhone 16/17 Pro) */
+          .scheduler-grid-cell {
+            min-height: 55px !important;
+            padding: 6px !important;
+          }
+          .booking-cell-content {
+            font-size: 0.72rem !important;
           }
         }
       `}</style>
