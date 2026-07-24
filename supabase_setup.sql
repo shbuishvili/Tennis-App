@@ -39,7 +39,7 @@ CREATE TABLE bookings (
   room_number VARCHAR(50) NOT NULL,
   start_time TIMESTAMP WITH TIME ZONE NOT NULL,
   end_time TIMESTAMP WITH TIME ZONE NOT NULL,
-  rackets_status VARCHAR(50) CHECK (rackets_status IN ('included', 'excluded')),
+  rackets_status VARCHAR(50) CHECK (rackets_status IN ('included', 'rented', 'excluded')),
   is_blocked BOOLEAN DEFAULT FALSE,
   notes TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
@@ -59,3 +59,21 @@ INSERT INTO court_settings (day_type, open_time, close_time, is_active) VALUES
 ('weekday', '08:00:00', '22:00:00', true),
 ('weekend', '09:00:00', '23:00:00', true),
 ('holiday', '10:00:00', '18:00:00', true);
+
+-- უსაფრთხოების წესების (RLS) გამორთვა საჯარო წვდომისთვის
+ALTER TABLE user_accounts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE courts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE bookings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE court_settings DISABLE ROW LEVEL SECURITY;
+
+-- 5. კორტების ჩაკეტვა თარიღებით (Court Closures)
+CREATE TABLE court_closures (
+  id SERIAL PRIMARY KEY,
+  court_id INT REFERENCES courts(id) ON DELETE CASCADE,
+  closure_date DATE NOT NULL,
+  reason VARCHAR(255) DEFAULT 'რემონტი',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  UNIQUE(court_id, closure_date)
+);
+
+ALTER TABLE court_closures DISABLE ROW LEVEL SECURITY;
