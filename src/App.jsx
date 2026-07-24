@@ -923,39 +923,22 @@ export default function App() {
               onClick={() => {
                 setSelectedBooking(null);
                 
-                // Snap current time to nearest 30-min interval on the selected calendar date
+                // Pass current Georgia time (UTC+4) as default.
+                // The modal has editable date & time inputs, so no snapping needed.
                 const now = new Date();
-                const snappedTime = new Date(selectedDate);
-                snappedTime.setHours(now.getHours());
-                const mins = now.getMinutes();
-                if (mins < 15) snappedTime.setMinutes(0, 0, 0);
-                else if (mins < 45) snappedTime.setMinutes(30, 0, 0);
-                else {
-                  snappedTime.setHours(now.getHours() + 1);
-                  snappedTime.setMinutes(0, 0, 0);
-                }
-
-                // Clamp to operating hours so the booking always falls within valid slots
-                const hours = getOperatingHours(selectedDate);
-                const [openH, openM] = hours.open.split(':').map(Number);
-                const [closeH, closeM] = hours.close.split(':').map(Number);
-                const openMinutes = openH * 60 + openM;
-                const closeMinutes = closeH * 60 + closeM;
-                const snappedMinutes = snappedTime.getHours() * 60 + snappedTime.getMinutes();
-
-                if (snappedMinutes < openMinutes) {
-                  // Before opening: snap to opening time
-                  snappedTime.setHours(openH, openM, 0, 0);
-                } else if (snappedMinutes >= closeMinutes) {
-                  // At or after closing: snap to last valid 30-min slot before close
-                  const lastSlotMinutes = closeMinutes - 30;
-                  snappedTime.setHours(Math.floor(lastSlotMinutes / 60), lastSlotMinutes % 60, 0, 0);
-                }
+                const georgiaOffsetMs = 4 * 60 * 60 * 1000;
+                const utcMs = now.getTime() + now.getTimezoneOffset() * 60 * 1000;
+                const georgiaMs = utcMs + georgiaOffsetMs;
+                // Convert back to a UTC ISO string that BookingModal will decode as Georgia local
+                // (modal reads it back as UTC+4, so we pass it as raw UTC = Georgia-4h)
+                const georgiaLocalMs = georgiaMs;
+                // Build ISO: treat georgia time as local, subtract 4h to get UTC
+                const utcForStorage = new Date(georgiaMs - georgiaOffsetMs);
 
                 setSelectedSlot({ 
                   courtId: courts[0]?.id || 1, 
                   courtName: courts[0]?.name || 'კორტი 1', 
-                  time: snappedTime.toISOString() 
+                  time: utcForStorage.toISOString()
                 });
                 setIsModalOpen(true);
               }}
