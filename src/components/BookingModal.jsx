@@ -1,5 +1,41 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, User, Key, FileText, Ban, Trash2 } from 'lucide-react';
+import { X, Calendar, User, Key, FileText, Ban, Trash2, Clock } from 'lucide-react';
+
+// Helper: Get current Georgia time (UTC+4) as a local Date object
+function getGeorgiaNow() {
+  const now = new Date();
+  // UTC+4 offset in ms
+  const georgiaOffset = 4 * 60 * 60 * 1000;
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60 * 1000;
+  return new Date(utcMs + georgiaOffset);
+}
+
+function toInputDate(d) {
+  // YYYY-MM-DD for <input type="date">
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function toInputTime(d) {
+  // HH:MM for <input type="time">
+  const h = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${h}:${min}`;
+}
+
+function buildISOFromInputs(dateStr, timeStr) {
+  // Combine date + time strings into a Date, treated as Georgia local time (UTC+4)
+  // We'll store as UTC ISO string offset by -4h so that the value
+  // represents the correct moment in time.
+  if (!dateStr || !timeStr) return null;
+  const [y, mo, d] = dateStr.split('-').map(Number);
+  const [h, mi] = timeStr.split(':').map(Number);
+  // Build UTC time: Georgia (UTC+4) local - 4h = UTC
+  const utcMs = Date.UTC(y, mo - 1, d, h - 4, mi, 0, 0);
+  return new Date(utcMs).toISOString();
+}
 
 export default function BookingModal({ 
   isOpen, 
@@ -12,8 +48,10 @@ export default function BookingModal({
 }) {
   const [fullName, setFullName] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [startTime, setStartTime] = useState('');
   const [duration, setDuration] = useState(1); // in hours: 1, 1.5, 2
-  const [racketsStatus, setRacketsStatus] = useState('excluded'); // 'included' or 'excluded'
+  const [racketsStatus, setRacketsStatus] = useState('excluded');
   const [isBlocked, setIsBlocked] = useState(false);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
@@ -22,16 +60,35 @@ export default function BookingModal({
     if (existingBooking) {
       setFullName(existingBooking.full_name || '');
       setRoomNumber(existingBooking.room_number || '');
-      // Calculate duration in hours
+      // Parse existing start time as Georgia local
+      const startGe = new Date(new Date(existingBooking.start_time).getTime() + 4 * 3600000 - new Date().getTimezoneOffset() * 60000);
+      // Use raw UTC + 4h offset trick
+      const startUtcMs = new Date(existingBooking.start_time).getTime();
+      const georgiaStartMs = startUtcMs + 4 * 3600000;
+      const georgiaStart = new Date(georgiaStartMs);
+      setStartDate(toInputDate(georgiaStart));
+      setStartTime(toInputTime(georgiaStart));
       const diffMs = new Date(existingBooking.end_time) - new Date(existingBooking.start_time);
-      const diffHrs = diffMs / (1000 * 60 * 60);
-      setDuration(diffHrs || 1);
+      setDuration(diffMs / 3600000 || 1);
       setRacketsStatus(existingBooking.rackets_status || 'excluded');
       setIsBlocked(existingBooking.is_blocked || false);
       setNotes(existingBooking.notes || '');
     } else {
       setFullName('');
       setRoomNumber('');
+      // Default: use selectedSlot time (already passed as UTC+4 correct ISO)
+      // or fall back to current Georgia time
+      if (selectedSlot?.time) {
+        const slotUtcMs = new Date(selectedSlot.time).getTime();
+        const georgiaSlotMs = slotUtcMs + 4 * 3600000;
+        const georgiaSlot = new Date(georgiaSlotMs);
+        setStartDate(toInputDate(georgiaSlot));
+        setStartTime(toInputTime(georgiaSlot));
+      } else {
+        const ge = getGeorgiaNow();
+        setStartDate(toInputDate(ge));
+        setStartTime(toInputTime(ge));
+      }
       setDuration(1);
       setRacketsStatus('excluded');
       setIsBlocked(false);
@@ -51,15 +108,26 @@ export default function BookingModal({
       return;
     }
 
-    const start = selectedSlot ? new Date(selectedSlot.time) : new Date();
-    const end = new Date(start.getTime() + duration * 60 * 60 * 1000);
+    if (!startDate || !startTime) {
+      setError('გთხოვთ მიუთითოთ დაწყების თარიღი და დრო');
+      return;
+    }
+
+    const startISO = buildISOFromInputs(startDate, startTime);
+    if (!startISO) {
+      setError('თარიღი ან დრო არასწორია');
+      return;
+    }
+
+    const startMs = new Date(startISO).getTime();
+    const endISO = new Date(startMs + duration * 3600000).toISOString();
 
     const bookingData = {
       court_id: selectedSlot?.courtId,
-      full_name: isBlocked ? 'ადმინისტრაციული ბლოკი' : fullName,
-      room_number: isBlocked ? 'BLOCKED' : roomNumber,
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
+      full_name: isBlocked ? 'ადმინისტრაციული ბლოკი' : fullName.trim(),
+      room_number: isBlocked ? 'BLOCKED' : roomNumber.trim(),
+      start_time: startISO,
+      end_time: endISO,
       rackets_status: isBlocked ? 'excluded' : racketsStatus,
       is_blocked: isBlocked,
       notes: notes
@@ -70,13 +138,6 @@ export default function BookingModal({
     }
 
     onSave(bookingData);
-  };
-
-  // Convert JS Date to Georgian formatted time string
-  const formatTime = (dateStr) => {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    return date.toLocaleTimeString('ka-GE', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
   return (
@@ -189,12 +250,29 @@ export default function BookingModal({
             </>
           )}
 
-          {/* Start Time details (Read-only representation) */}
-          <div className="form-group time-info-panel">
-            <Calendar size={14} className="margin-right-xs text-muted" />
-            <span>
-              დრო: <strong>{formatTime(selectedSlot?.time)}</strong> -დან
-            </span>
+          {/* Editable date + time fields */}
+          <div className="form-group">
+            <label className="form-label">
+              <Clock size={14} className="margin-right-xs text-muted" />
+              დაწყების თარიღი და დრო (UTC+4 საქართველო)
+            </label>
+            <div className="datetime-row">
+              <input
+                type="date"
+                className="form-input datetime-input"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                required
+              />
+              <input
+                type="time"
+                className="form-input datetime-input"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                step="1800"
+                required
+              />
+            </div>
           </div>
 
           {/* Optional notes */}
@@ -346,6 +424,23 @@ export default function BookingModal({
           resize: none;
         }
 
+        /* Date + Time row */
+        .datetime-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+        }
+        .datetime-input {
+          font-size: 0.95rem;
+          color: white;
+          text-align: center;
+        }
+        /* Make native date/time picker icon match theme */
+        .datetime-input::-webkit-calendar-picker-indicator {
+          filter: invert(1) opacity(0.5);
+          cursor: pointer;
+        }
+
         /* Duration Buttons */
         .duration-selector {
           display: grid;
@@ -373,7 +468,7 @@ export default function BookingModal({
           color: var(--color-volt);
         }
 
-        /* Rackets toggler matching slide 5 */
+        /* Rackets toggler */
         .rackets-toggle-container {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -482,15 +577,8 @@ export default function BookingModal({
         .text-warning {
           color: var(--color-warning);
         }
-
-        .time-info-panel {
-          background: rgba(255, 255, 255, 0.02);
-          border: 1px solid var(--border-color);
-          padding: 10px 12px;
-          border-radius: var(--radius-sm);
-          font-size: 0.85rem;
-          display: flex;
-          align-items: center;
+        .text-muted {
+          color: var(--text-muted);
         }
 
         .modal-footer {
@@ -509,6 +597,18 @@ export default function BookingModal({
         
         .btn-delete {
           padding: 10px 14px;
+        }
+
+        /* Mobile */
+        @media (max-width: 900px) {
+          .modal-content {
+            max-width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+          }
+          .datetime-row {
+            grid-template-columns: 1fr;
+          }
         }
       `}</style>
     </div>
