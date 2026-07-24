@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient';
 import BookingModal from './components/BookingModal';
 import Login from './components/Login';
 import StaffManagement from './components/StaffManagement';
+import DateRangePicker from './components/DateRangePicker';
 import { 
   LayoutDashboard, 
   Calendar as CalendarIcon, 
@@ -1461,8 +1462,8 @@ export default function App() {
                   
                   {/* Add Closure form */}
                   <form onSubmit={handleAddClosure} className="closure-form margin-bottom-md">
-                    <div className="closure-form-row">
-                      {/* Court selector */}
+                    {/* Row 1: court + date range picker */}
+                    <div className="closure-form-top">
                       <div className="closure-form-group">
                         <label className="form-label">კორტი</label>
                         <select
@@ -1478,54 +1479,37 @@ export default function App() {
                         </select>
                       </div>
 
-                      {/* Start date */}
-                      <div className="closure-form-group">
-                        <label className="form-label">დაწყება</label>
-                        <input 
-                          type="date" 
-                          className="form-input text-sm"
-                          value={closureDateStart}
-                          onChange={(e) => {
-                            setClosureDateStart(e.target.value);
-                            // Auto-set end date if not yet set or is before start
-                            if (!closureDateEnd || e.target.value > closureDateEnd) {
-                              setClosureDateEnd(e.target.value);
-                            }
-                          }}
-                          required
-                        />
-                      </div>
-
-                      {/* End date */}
-                      <div className="closure-form-group">
-                        <label className="form-label">დასრულება</label>
-                        <input 
-                          type="date" 
-                          className="form-input text-sm"
-                          value={closureDateEnd}
-                          min={closureDateStart}
-                          onChange={(e) => setClosureDateEnd(e.target.value)}
-                          required
-                        />
-                      </div>
-
-                      {/* Reason */}
-                      <div className="closure-form-group closure-reason-group">
-                        <label className="form-label">მიზეზი</label>
-                        <input 
-                          type="text" 
-                          className="form-input text-sm"
-                          value={closureReason}
-                          onChange={(e) => setClosureReason(e.target.value)}
-                          placeholder="მაგ. ტურნირი, ღონისძიება"
-                          required
+                      <div className="closure-form-group closure-datepicker-group">
+                        <label className="form-label">პერიოდი (დაწყება → დასრულება)</label>
+                        <DateRangePicker
+                          startDate={closureDateStart}
+                          endDate={closureDateEnd}
+                          onStartChange={setClosureDateStart}
+                          onEndChange={setClosureDateEnd}
                         />
                       </div>
                     </div>
 
-                    <button type="submit" className="btn btn-primary btn-xs margin-top-sm">
-                      ჩაკეტვა
-                    </button>
+                    {/* Row 2: reason + submit */}
+                    <div className="closure-form-bottom">
+                      <div className="closure-form-group" style={{ flex: 1 }}>
+                        <label className="form-label">მიზეზი</label>
+                        <input
+                          type="text"
+                          className="form-input text-sm"
+                          value={closureReason}
+                          onChange={(e) => setClosureReason(e.target.value)}
+                          placeholder="მაგ. ტურნირი, ღონისძიება, რემონტი"
+                          required
+                        />
+                      </div>
+                      <div className="closure-submit-col">
+                        <label className="form-label">&nbsp;</label>
+                        <button type="submit" className="btn btn-primary btn-xs">
+                          ჩაკეტვა
+                        </button>
+                      </div>
+                    </div>
                   </form>
 
                   {/* Closures list */}
@@ -1660,13 +1644,33 @@ export default function App() {
           border: 1px solid var(--border-color);
           border-radius: var(--radius-sm);
           padding: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
         }
 
-        .closure-form-row {
+        .closure-form-top {
           display: grid;
-          grid-template-columns: 1.5fr 1fr 1fr 2fr;
+          grid-template-columns: 180px 1fr;
           gap: 12px;
           align-items: end;
+        }
+
+        .closure-form-bottom {
+          display: flex;
+          gap: 12px;
+          align-items: end;
+        }
+
+        .closure-submit-col {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          flex-shrink: 0;
+        }
+
+        .closure-datepicker-group {
+          min-width: 0;
         }
 
         .closure-form-group {
@@ -1675,16 +1679,18 @@ export default function App() {
           gap: 4px;
         }
 
-        .closure-reason-group {
-          /* wider column for reason */
-        }
-
         @media (max-width: 900px) {
-          .closure-form-row {
-            grid-template-columns: 1fr 1fr;
+          .closure-form-top {
+            grid-template-columns: 1fr;
           }
-          .closure-reason-group {
-            grid-column: 1 / -1;
+          .closure-form-bottom {
+            flex-direction: column;
+          }
+          .closure-submit-col {
+            align-self: stretch;
+          }
+          .closure-submit-col .btn {
+            width: 100%;
           }
         }
 
