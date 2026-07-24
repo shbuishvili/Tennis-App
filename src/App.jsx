@@ -1347,56 +1347,58 @@ export default function App() {
                   <h3>სამუშაო საათების კონტროლი</h3>
                   <p className="text-xs text-secondary margin-bottom-md">კალენდრის სამუშაო საათების განსაზღვრა</p>
                   
-                  <table className="settings-table">
-                    <thead>
-                      <tr>
-                        <th>კვირის დღე</th>
-                        <th>გახსნა</th>
-                        <th>დაკეტვა</th>
-                        <th>სტატუსი</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {settings.map((row) => (
-                        <tr key={row.day_type}>
-                          <td><strong>{getDayTypeLabel(row.day_type)}</strong></td>
-                          <td>
-                            <input 
-                              type="time" 
-                              className="form-input time-input-field" 
-                              value={row.open_time.substring(0, 5)}
-                              onChange={(e) => handleUpdateSettings({
-                                ...row,
-                                open_time: `${e.target.value}:00`
-                              })}
-                            />
-                          </td>
-                          <td>
-                            <input 
-                              type="time" 
-                              className="form-input time-input-field" 
-                              value={row.close_time.substring(0, 5)}
-                              onChange={(e) => handleUpdateSettings({
-                                ...row,
-                                close_time: `${e.target.value}:00`
-                              })}
-                            />
-                          </td>
-                          <td>
-                            <button 
-                              className={`btn btn-xs status-toggle-btn ${row.is_active ? 'active' : 'inactive'}`}
-                              onClick={() => handleUpdateSettings({
-                                ...row,
-                                is_active: !row.is_active
-                              })}
-                            >
-                              {row.is_active ? 'აქტიური' : 'შეზღუდული'}
-                            </button>
-                          </td>
+                  <div className="settings-table-wrapper">
+                    <table className="settings-table">
+                      <thead>
+                        <tr>
+                          <th>კვირის დღე</th>
+                          <th>გახსნა</th>
+                          <th>დაკეტვა</th>
+                          <th>სტატუსი</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {settings.map((row) => (
+                          <tr key={row.day_type}>
+                            <td><strong>{getDayTypeLabel(row.day_type)}</strong></td>
+                            <td>
+                              <input 
+                                type="time" 
+                                className="form-input time-input-field" 
+                                value={row.open_time.substring(0, 5)}
+                                onChange={(e) => handleUpdateSettings({
+                                  ...row,
+                                  open_time: `${e.target.value}:00`
+                                })}
+                              />
+                            </td>
+                            <td>
+                              <input 
+                                type="time" 
+                                className="form-input time-input-field" 
+                                value={row.close_time.substring(0, 5)}
+                                onChange={(e) => handleUpdateSettings({
+                                  ...row,
+                                  close_time: `${e.target.value}:00`
+                                })}
+                              />
+                            </td>
+                            <td>
+                              <button 
+                                className={`btn btn-xs status-toggle-btn ${row.is_active ? 'active' : 'inactive'}`}
+                                onClick={() => handleUpdateSettings({
+                                  ...row,
+                                  is_active: !row.is_active
+                                })}
+                              >
+                                {row.is_active ? 'აქტიური' : 'შეზღუდული'}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
                 {/* Court configurations (ADD, DELETE, MAINTENANCE) */}
@@ -2401,6 +2403,11 @@ export default function App() {
         .settings-card {
           padding: 24px;
         }
+        .settings-table-wrapper {
+          overflow-x: auto;
+          width: 100%;
+          -webkit-overflow-scrolling: touch;
+        }
         .settings-table {
           width: 100%;
           border-collapse: collapse;
@@ -2502,6 +2509,37 @@ export default function App() {
           /* Prevent zoom on iPhone by enforcing 16px inputs */
           input, select, textarea {
             font-size: 16px !important;
+          }
+
+          .tab-view-container {
+            padding: 12px;
+          }
+
+          .settings-card {
+            padding: 16px;
+          }
+
+          .profile-view {
+            padding-top: 16px;
+            width: 100%;
+          }
+
+          .profile-card-container {
+            padding: 16px;
+            max-width: 100%;
+          }
+
+          .court-edit-item {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 12px;
+          }
+
+          .court-edit-actions {
+            width: 100%;
+            justify-content: flex-end;
+            margin-top: 4px;
           }
 
           .app-container {
