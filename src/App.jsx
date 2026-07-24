@@ -154,6 +154,47 @@ export default function App() {
     initApp();
   }, []);
 
+  // Real-time synchronization & polling fallback for bookings
+  useEffect(() => {
+    let intervalId;
+
+    if (isSupabaseConnected) {
+      // 1. Supabase Realtime Subscription
+      const channel = supabase
+        .channel('realtime-bookings')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'bookings' },
+          async () => {
+            const { data } = await supabase.from('bookings').select('*');
+            if (data) setBookings(data);
+          }
+        )
+        .subscribe();
+
+      // 2. Polling fallback (every 15 seconds) just in case Realtime is disabled on the database
+      intervalId = setInterval(async () => {
+        const { data } = await supabase.from('bookings').select('*');
+        if (data) setBookings(data);
+      }, 15000);
+
+      return () => {
+        supabase.removeChannel(channel);
+        clearInterval(intervalId);
+      };
+    } else {
+      // LocalStorage mode: check if other tabs made changes (every 5 seconds)
+      intervalId = setInterval(() => {
+        const localBookings = localStorage.getItem('bookings');
+        if (localBookings) {
+          setBookings(JSON.parse(localBookings));
+        }
+      }, 5000);
+
+      return () => clearInterval(intervalId);
+    }
+  }, [isSupabaseConnected]);
+
   // Update mobile court view selection automatically if courts list changes
   useEffect(() => {
     if (courts.length > 0 && !courts.some(c => c.id === selectedCourtMobile)) {
@@ -541,13 +582,15 @@ export default function App() {
     slotTime.setHours(parseInt(slotH), parseInt(slotM), 0, 0);
 
     const booking = getBookingForSlot(courtId, timeSlot, selectedDate);
+    const court = courts.find(c => c.id === courtId);
+    const courtName = court ? court.name : `კორტი ${courtId}`;
     
     if (booking) {
       setSelectedBooking(booking);
-      setSelectedSlot({ courtId, time: booking.start_time });
+      setSelectedSlot({ courtId, courtName, time: booking.start_time });
     } else {
       setSelectedBooking(null);
-      setSelectedSlot({ courtId, time: slotTime.toISOString() });
+      setSelectedSlot({ courtId, courtName, time: slotTime.toISOString() });
     }
     setIsModalOpen(true);
   };
@@ -742,7 +785,11 @@ export default function App() {
               className="btn btn-primary"
               onClick={() => {
                 setSelectedBooking(null);
-                setSelectedSlot({ courtId: courts[0]?.id || 1, time: new Date().toISOString() });
+                setSelectedSlot({ 
+                  courtId: courts[0]?.id || 1, 
+                  courtName: courts[0]?.name || 'კორტი 1', 
+                  time: new Date().toISOString() 
+                });
                 setIsModalOpen(true);
               }}
             >
@@ -842,14 +889,14 @@ export default function App() {
                         <span className="legend-dot volt"></span>
                         <div className="legend-details">
                           <span className="legend-label">Included (ჩოგნით)</span>
-                          <span className="legend-value">{stats.racketsIncluded} ჯავშანი ({stats.racketsPct}%)</span>
+                          <span className="legend-value">{stats.racketsIncluded} ჯავშანი ({stats.racketsTotal > 0 ? stats.racketsPct : 0}%)</span>
                         </div>
                       </div>
                       <div className="legend-item flex-align">
                         <span className="legend-dot dark"></span>
                         <div className="legend-details">
                           <span className="legend-label">Excluded (თავისი ჩოგნით)</span>
-                          <span className="legend-value">{stats.racketsExcluded} ჯავშანი ({100 - stats.racketsPct}%)</span>
+                          <span className="legend-value">{stats.racketsExcluded} ჯავშანი ({stats.racketsTotal > 0 ? (100 - stats.racketsPct) : 0}%)</span>
                         </div>
                       </div>
                     </div>
@@ -2077,6 +2124,9 @@ export default function App() {
 
         /* Responsive Design */
         @media (max-width: 900px) {
+          input, select, textarea {
+            font-size: 16px !important;
+          }
           .app-container {
             flex-direction: column;
           }
