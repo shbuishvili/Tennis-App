@@ -476,9 +476,14 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
           .staff-layout {
             grid-template-columns: 1fr;
             gap: 16px;
+            min-width: 0;
+            max-width: 100vw;
           }
           .staff-card {
             padding: 16px;
+            min-width: 0;
+            max-width: 100%;
+            box-sizing: border-box;
           }
         }
       `}</style>
