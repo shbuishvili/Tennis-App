@@ -1,16 +1,57 @@
-# React + Vite
+# 🎾 Tennis Reservation — კორტების დაჯავშნის პორტალი
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+ეს არის ჩოგბურთის კორტების მართვისა და დაჯავშნის პრემიუმ ადმინ-პორტალი, რომელიც აწყობილია **React + Vite** ტექნოლოგიით და ინტეგრირებულია **Supabase** მონაცემთა ბაზასთან.
 
-Currently, two official plugins are available:
+პროექტი ოპტიმიზებულია როგორც კომპიუტერისთვის (Side-by-side კორტების ხედი), ისე მობილურისთვის (iPhone-ის ზუმის დაცვითა და ტაბების ნავიგაციით). ის სრულად მზად არის GitHub-ზე ასატვირთად და Vercel-ზე დასადეპლოებლად.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## 🚀 ფუნქციონალი (Features)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. **მომხმარებელთა როლები და უსაფრთხოება (RBAC):**
+   * **Super Admin (`super_admin`) & Manager (`manager`):** სრული წვდომა ანალიტიკაზე (დეშბორდი), კალენდარზე, სტუმრების სიაზე, თანამშრომელთა მართვაზე და პარამეტრებზე.
+   * **Staff (`staff`):** შეზღუდული წვდომა — ხედავს მხოლოდ კალენდარს ჯავშნებისთვის და საკუთარი პაროლის შეცვლის გვერდს.
+2. **მომხმარებელთა მართვის პანელი:** მენეჯერებს შეუძლიათ ახალი თანამშრომლების შექმნა, წაშლა და მათი პაროლების შეცვლა/აღდგენა.
+3. **კორტების დინამიკური კონტროლი:** კორტების დამატება/წაშლა პარამეტრებიდან და რემონტის რეჟიმი (კორტის დროებითი ჩაკეტვა, რაც ბლოკავს კალენდარში მთელ სვეტს).
+4. **დროის კონტროლი:** სამუშაო და დასვენების დღეების გრაფიკის მართვა, რაც ავტომატურად ცვლის კალენდრის ბადეს.
+5. **ინვენტარის ანალიტიკა:** გაცემული ჩოგნების პროცენტული განაწილების წრიული დიაგრამა (included/excluded) რეალურ დროში.
 
-## Expanding the Oxlint configuration
+---
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+## 🛠️ გაშვების ინსტრუქცია (Setup & Run)
+
+### 1. ლოკალურად გაშვება
+თუ გსურთ საიტის კომპიუტერზე ჩართვა:
+```bash
+# დამოკიდებულებების ჩამოწერა
+npm install
+
+# სატესტო რეჟიმში ჩართვა
+npm run dev
+```
+
+### 2. Supabase ბაზის მომზადება
+1. შედით [Supabase](https://supabase.com/)-ზე და შექმენით ახალი პროექტი.
+2. გადადით **SQL Editor**-ში, შექმენით ახალი მოთხოვნა (**New Query**), ჩასვით ფაილში `supabase_setup.sql` მოცემული კოდი და დააჭირეთ **Run**.
+3. ეს შექმნის ყველა საჭირო ცხრილს, საწყის კორტებს, განრიგს და **სადემონსტრაციო ანგარიშებს**:
+   * **სუპერ ადმინი:** `admin` / `admin123`
+   * **მენეჯერი:** `manager` / `manager123`
+   * **თანამშრომელი:** `staff` / `staff123`
+
+### 3. გარემო ცვლადები (Environment Variables)
+შექმენით `.env` ფაილი პროექტის მთავარ საქაღალდეში და ჩაწერეთ თქვენი Supabase გასაღებები (რომლებიც შეგიძლიათ იპოვოთ Supabase Dashboard-ში **Connect** ღილაკზე დაჭერით):
+```env
+VITE_SUPABASE_URL=https://თქვენი_პროექტის_id.supabase.co
+VITE_SUPABASE_ANON_KEY=თქვენი_საჯარო_anon_გასაღები
+```
+
+---
+
+## 🌐 Vercel-ზე დეპლოი (Vercel Deployment)
+
+1. ატვირთეთ კოდი GitHub-ზე.
+2. Vercel-ზე შექმენით ახალი პროექტი თქვენი GitHub რეპოზიტორიიდან.
+3. **Environment Variables**-ში დაამატეთ:
+   * `VITE_SUPABASE_URL`
+   * `VITE_SUPABASE_ANON_KEY`
+4. დააჭირეთ **Deploy**-ს.
