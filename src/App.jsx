@@ -86,7 +86,8 @@ export default function App() {
 
   // Court closures creation states
   const [closureCourtId, setClosureCourtId] = useState('');
-  const [closureDate, setClosureDate] = useState('');
+  const [closureDateStart, setClosureDateStart] = useState('');
+  const [closureDateEnd, setClosureDateEnd] = useState('');
   const [closureReason, setClosureReason] = useState('');
 
   // Change Password state for current user
@@ -97,8 +98,8 @@ export default function App() {
 
   // Initial Load & Auth Check
   useEffect(() => {
-    // Check session
-    const savedUser = sessionStorage.getItem('tennis_app_user');
+    // Check persisted login (localStorage so it survives browser restarts)
+    const savedUser = localStorage.getItem('tennis_app_user');
     if (savedUser) {
       const parsedUser = JSON.parse(savedUser);
       setCurrentUser(parsedUser);
@@ -239,7 +240,7 @@ export default function App() {
   // Auth helper
   const handleLoginSuccess = (user) => {
     setCurrentUser(user);
-    sessionStorage.setItem('tennis_app_user', JSON.stringify(user));
+    localStorage.setItem('tennis_app_user', JSON.stringify(user));
     if (user.role === 'staff') {
       setActiveTab('calendar');
     } else {
@@ -249,7 +250,7 @@ export default function App() {
 
   const handleSignOut = () => {
     setCurrentUser(null);
-    sessionStorage.removeItem('tennis_app_user');
+    localStorage.removeItem('tennis_app_user');
     setActiveTab('login');
   };
 
@@ -455,39 +456,65 @@ export default function App() {
     }
   };
 
-  // Save court closure rule
+  // Save court closure rule (date range — inserts one record per day)
   const handleAddClosure = async (e) => {
     e.preventDefault();
-    if (!closureCourtId || !closureDate || !closureReason.trim()) return;
+    if (!closureCourtId || !closureDateStart || !closureDateEnd || !closureReason.trim()) return;
+
+    const start = new Date(closureDateStart);
+    const end = new Date(closureDateEnd);
+    if (end < start) {
+      alert('დასრულების თარიღი უნდა იყოს დაწყების თარიღის შემდეგ!');
+      return;
+    }
+
+    // Build array of every date in range
+    const datesToClose = [];
+    const cur = new Date(start);
+    while (cur <= end) {
+      datesToClose.push(cur.toISOString().split('T')[0]); // YYYY-MM-DD
+      cur.setDate(cur.getDate() + 1);
+    }
 
     setLoading(true);
     try {
-      const newClosure = {
-        court_id: parseInt(closureCourtId),
-        closure_date: closureDate,
-        reason: closureReason.trim()
-      };
-
       if (isSupabaseConnected) {
+        const rows = datesToClose.map(d => ({
+          court_id: parseInt(closureCourtId),
+          closure_date: d,
+          reason: closureReason.trim()
+        }));
+        // upsert to silently skip duplicates
         const { error } = await supabase
           .from('court_closures')
-          .insert(newClosure);
+          .upsert(rows, { onConflict: 'court_id,closure_date' });
         if (error) throw error;
 
-        // Fetch refreshed closures
         const { data } = await supabase.from('court_closures').select('*');
         setCourtClosures(data || []);
       } else {
-        const updatedClosures = [...courtClosures, { id: Date.now(), ...newClosure }];
+        const existingKeys = new Set(
+          courtClosures.map(c => `${c.court_id}_${c.closure_date}`)
+        );
+        const newRecords = datesToClose
+          .filter(d => !existingKeys.has(`${closureCourtId}_${d}`))
+          .map(d => ({
+            id: Date.now() + Math.random(),
+            court_id: parseInt(closureCourtId),
+            closure_date: d,
+            reason: closureReason.trim()
+          }));
+        const updatedClosures = [...courtClosures, ...newRecords];
         setCourtClosures(updatedClosures);
         localStorage.setItem('court_closures', JSON.stringify(updatedClosures));
       }
 
       setClosureCourtId('');
-      setClosureDate('');
+      setClosureDateStart('');
+      setClosureDateEnd('');
       setClosureReason('');
     } catch (err) {
-      alert('ჩაკეტვის დამატებისას მოხდა შეცდომა (შესაძლოა ეს კორტი ამ თარიღზე უკვე ჩაკეტილია): ' + err.message);
+      alert('ჩაკეტვის დამატებისას მოხდა შეცდომა: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -559,7 +586,7 @@ export default function App() {
       // Update current state
       const updatedUser = { ...currentUser, password: myNewPassword.trim() };
       setCurrentUser(updatedUser);
-      sessionStorage.setItem('tennis_app_user', JSON.stringify(updatedUser));
+      localStorage.setItem('tennis_app_user', JSON.stringify(updatedUser));
 
       setPassSuccess('პაროლი წარმატებით განახლდა!');
       setMyOldPassword('');
@@ -895,7 +922,7 @@ export default function App() {
               onClick={() => {
                 setSelectedBooking(null);
                 
-                // Snapping current time to nearest 30-min interval on the selected calendar date
+                // Snap current time to nearest 30-min interval on the selected calendar date
                 const now = new Date();
                 const snappedTime = new Date(selectedDate);
                 snappedTime.setHours(now.getHours());
@@ -905,6 +932,23 @@ export default function App() {
                 else {
                   snappedTime.setHours(now.getHours() + 1);
                   snappedTime.setMinutes(0, 0, 0);
+                }
+
+                // Clamp to operating hours so the booking always falls within valid slots
+                const hours = getOperatingHours(selectedDate);
+                const [openH, openM] = hours.open.split(':').map(Number);
+                const [closeH, closeM] = hours.close.split(':').map(Number);
+                const openMinutes = openH * 60 + openM;
+                const closeMinutes = closeH * 60 + closeM;
+                const snappedMinutes = snappedTime.getHours() * 60 + snappedTime.getMinutes();
+
+                if (snappedMinutes < openMinutes) {
+                  // Before opening: snap to opening time
+                  snappedTime.setHours(openH, openM, 0, 0);
+                } else if (snappedMinutes >= closeMinutes) {
+                  // At or after closing: snap to last valid 30-min slot before close
+                  const lastSlotMinutes = closeMinutes - 30;
+                  snappedTime.setHours(Math.floor(lastSlotMinutes / 60), lastSlotMinutes % 60, 0, 0);
                 }
 
                 setSelectedSlot({ 
@@ -1416,34 +1460,70 @@ export default function App() {
                   <p className="text-xs text-secondary margin-bottom-md">ჩაკეტეთ კორტი კონკრეტულ თარიღზე ღონისძიების ან ტურნირის გამო</p>
                   
                   {/* Add Closure form */}
-                  <form onSubmit={handleAddClosure} className="add-court-form margin-bottom-md flex-align">
-                    <select
-                      className="form-input select-court-type text-sm"
-                      value={closureCourtId}
-                      onChange={(e) => setClosureCourtId(e.target.value)}
-                      required
-                    >
-                      <option value="">აირჩიეთ კორტი</option>
-                      {courts.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                    <input 
-                      type="date" 
-                      className="form-input text-sm"
-                      value={closureDate}
-                      onChange={(e) => setClosureDate(e.target.value)}
-                      required
-                    />
-                    <input 
-                      type="text" 
-                      className="form-input text-sm"
-                      value={closureReason}
-                      onChange={(e) => setClosureReason(e.target.value)}
-                      placeholder="მიზეზი (მაგ. ტურნირი)"
-                      required
-                    />
-                    <button type="submit" className="btn btn-primary btn-xs">
+                  <form onSubmit={handleAddClosure} className="closure-form margin-bottom-md">
+                    <div className="closure-form-row">
+                      {/* Court selector */}
+                      <div className="closure-form-group">
+                        <label className="form-label">კორტი</label>
+                        <select
+                          className="form-input text-sm"
+                          value={closureCourtId}
+                          onChange={(e) => setClosureCourtId(e.target.value)}
+                          required
+                        >
+                          <option value="">აირჩიეთ კორტი</option>
+                          {courts.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Start date */}
+                      <div className="closure-form-group">
+                        <label className="form-label">დაწყება</label>
+                        <input 
+                          type="date" 
+                          className="form-input text-sm"
+                          value={closureDateStart}
+                          onChange={(e) => {
+                            setClosureDateStart(e.target.value);
+                            // Auto-set end date if not yet set or is before start
+                            if (!closureDateEnd || e.target.value > closureDateEnd) {
+                              setClosureDateEnd(e.target.value);
+                            }
+                          }}
+                          required
+                        />
+                      </div>
+
+                      {/* End date */}
+                      <div className="closure-form-group">
+                        <label className="form-label">დასრულება</label>
+                        <input 
+                          type="date" 
+                          className="form-input text-sm"
+                          value={closureDateEnd}
+                          min={closureDateStart}
+                          onChange={(e) => setClosureDateEnd(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      {/* Reason */}
+                      <div className="closure-form-group closure-reason-group">
+                        <label className="form-label">მიზეზი</label>
+                        <input 
+                          type="text" 
+                          className="form-input text-sm"
+                          value={closureReason}
+                          onChange={(e) => setClosureReason(e.target.value)}
+                          placeholder="მაგ. ტურნირი, ღონისძიება"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <button type="submit" className="btn btn-primary btn-xs margin-top-sm">
                       ჩაკეტვა
                     </button>
                   </form>
@@ -1453,26 +1533,59 @@ export default function App() {
                     {courtClosures.length === 0 ? (
                       <p className="text-xs text-muted padding-xs">აქტიური ჩაკეტვები არ არის</p>
                     ) : (
-                      courtClosures.map(closure => {
-                        const court = courts.find(c => c.id === parseInt(closure.court_id));
-                        const formattedDate = new Date(closure.closure_date).toLocaleDateString('ka-GE', { month: 'short', day: 'numeric', year: 'numeric' });
-                        return (
-                          <div key={closure.id} className="court-edit-item glass-panel">
-                            <div className="court-details-col">
-                              <strong>{court ? court.name : `კორტი ${closure.court_id}`}</strong>
-                              <span className="text-xs text-secondary">{formattedDate} — {closure.reason}</span>
+                      courtClosures
+                        .sort((a, b) => new Date(a.closure_date) - new Date(b.closure_date))
+                        .reduce((groups, closure) => {
+                          // Group consecutive dates for same court+reason into one row
+                          const last = groups[groups.length - 1];
+                          if (
+                            last &&
+                            last.court_id === parseInt(closure.court_id) &&
+                            last.reason === closure.reason &&
+                            // consecutive day?
+                            (new Date(closure.closure_date) - new Date(last.endDate)) / 86400000 === 1
+                          ) {
+                            last.endDate = closure.closure_date;
+                            last.ids.push(closure.id);
+                          } else {
+                            groups.push({
+                              court_id: parseInt(closure.court_id),
+                              reason: closure.reason,
+                              startDate: closure.closure_date,
+                              endDate: closure.closure_date,
+                              ids: [closure.id]
+                            });
+                          }
+                          return groups;
+                        }, [])
+                        .map((group, i) => {
+                          const court = courts.find(c => c.id === group.court_id);
+                          const fmtDate = (d) => new Date(d).toLocaleDateString('ka-GE', { month: 'short', day: 'numeric', year: 'numeric' });
+                          const dateLabel = group.startDate === group.endDate
+                            ? fmtDate(group.startDate)
+                            : `${fmtDate(group.startDate)} — ${fmtDate(group.endDate)}`;
+                          return (
+                            <div key={i} className="court-edit-item glass-panel">
+                              <div className="court-details-col">
+                                <strong>{court ? court.name : `კორტი ${group.court_id}`}</strong>
+                                <span className="text-xs text-secondary">{dateLabel} · {group.reason}</span>
+                              </div>
+                              <div className="court-edit-actions">
+                                <button 
+                                  className="btn btn-danger btn-xs flex-align btn-delete-court"
+                                  onClick={async () => {
+                                    if (!window.confirm('ნამდვილად გსურთ ამ ჩაკეტვის გაუქმება?')) return;
+                                    for (const id of group.ids) {
+                                      await handleDeleteClosure(id);
+                                    }
+                                  }}
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
                             </div>
-                            <div className="court-edit-actions">
-                              <button 
-                                className="btn btn-danger btn-xs flex-align btn-delete-court"
-                                onClick={() => handleDeleteClosure(closure.id)}
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })
+                          );
+                        })
                     )}
                   </div>
                 </div>
@@ -1541,6 +1654,40 @@ export default function App() {
       />
 
       <style>{`
+        /* Court closure date range form */
+        .closure-form {
+          background: rgba(255,255,255,0.02);
+          border: 1px solid var(--border-color);
+          border-radius: var(--radius-sm);
+          padding: 16px;
+        }
+
+        .closure-form-row {
+          display: grid;
+          grid-template-columns: 1.5fr 1fr 1fr 2fr;
+          gap: 12px;
+          align-items: end;
+        }
+
+        .closure-form-group {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .closure-reason-group {
+          /* wider column for reason */
+        }
+
+        @media (max-width: 900px) {
+          .closure-form-row {
+            grid-template-columns: 1fr 1fr;
+          }
+          .closure-reason-group {
+            grid-column: 1 / -1;
+          }
+        }
+
         /* User Profile widget in sidebar */
         .user-profile-widget {
           display: flex;
