@@ -508,7 +508,7 @@ export default function App() {
       racketsTotal: racketsIncluded + racketsExcluded,
       racketsPct: (racketsIncluded + racketsExcluded) > 0 
         ? Math.round((racketsIncluded / (racketsIncluded + racketsExcluded)) * 100) 
-        : 65, // default visual placeholder if empty
+        : 0, // default visual placeholder if empty
       occupancyRate
     };
   };
