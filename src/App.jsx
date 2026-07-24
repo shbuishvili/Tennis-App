@@ -714,23 +714,48 @@ export default function App() {
       return;
     }
 
-    const [slotH, slotM] = timeSlot.split(':');
-    const slotTime = new Date(selectedDate);
-    slotTime.setHours(parseInt(slotH), parseInt(slotM), 0, 0);
-
-    const booking = getBookingForSlot(courtId, timeSlot, selectedDate);
     const court = courts.find(c => c.id === courtId);
     const courtName = court ? court.name : `კორტი ${courtId}`;
-    
+
+    // Build "YYYY-MM-DD" from selected calendar date
+    const y = selectedDate.getFullYear();
+    const mo = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const d = String(selectedDate.getDate()).padStart(2, '0');
+    const slotDateStr = `${y}-${mo}-${d}`;
+
+    const booking = getBookingForSlot(courtId, timeSlot, selectedDate);
+
     if (booking) {
+      // For existing booking: decode start_time (UTC ISO) → Georgia local (UTC+4)
+      const startUtcMs = new Date(booking.start_time).getTime();
+      const geMs = startUtcMs + 4 * 3600000;
+      const geDate = new Date(geMs);
+      const bY = geDate.getUTCFullYear();
+      const bM = String(geDate.getUTCMonth() + 1).padStart(2, '0');
+      const bD = String(geDate.getUTCDate()).padStart(2, '0');
+      const bH = String(geDate.getUTCHours()).padStart(2, '0');
+      const bMin = String(geDate.getUTCMinutes()).padStart(2, '0');
       setSelectedBooking(booking);
-      setSelectedSlot({ courtId, courtName, time: booking.start_time });
+      setSelectedSlot({ 
+        courtId, 
+        courtName, 
+        time: booking.start_time, // keep for backwards compat
+        slotDate: `${bY}-${bM}-${bD}`,
+        slotTime: `${bH}:${bMin}`
+      });
     } else {
       setSelectedBooking(null);
-      setSelectedSlot({ courtId, courtName, time: slotTime.toISOString() });
+      setSelectedSlot({ 
+        courtId, 
+        courtName, 
+        time: null,
+        slotDate: slotDateStr,
+        slotTime: timeSlot  // e.g. "09:00" — exactly what was clicked
+      });
     }
     setIsModalOpen(true);
   };
+
 
   // Get active time slots lists
   const currentHours = getOperatingHours(selectedDate);
@@ -922,23 +947,20 @@ export default function App() {
               className="btn btn-primary"
               onClick={() => {
                 setSelectedBooking(null);
-                
-                // Pass current Georgia time (UTC+4) as default.
-                // The modal has editable date & time inputs, so no snapping needed.
+
+                // Compute current Georgia time (UTC+4) as plain date/time strings
                 const now = new Date();
-                const georgiaOffsetMs = 4 * 60 * 60 * 1000;
-                const utcMs = now.getTime() + now.getTimezoneOffset() * 60 * 1000;
-                const georgiaMs = utcMs + georgiaOffsetMs;
-                // Convert back to a UTC ISO string that BookingModal will decode as Georgia local
-                // (modal reads it back as UTC+4, so we pass it as raw UTC = Georgia-4h)
-                const georgiaLocalMs = georgiaMs;
-                // Build ISO: treat georgia time as local, subtract 4h to get UTC
-                const utcForStorage = new Date(georgiaMs - georgiaOffsetMs);
+                const geMs = now.getTime() + now.getTimezoneOffset() * 60000 + 4 * 3600000;
+                const ge = new Date(geMs);
+                const slotDate = `${ge.getUTCFullYear()}-${String(ge.getUTCMonth()+1).padStart(2,'0')}-${String(ge.getUTCDate()).padStart(2,'0')}`;
+                const slotTime = `${String(ge.getUTCHours()).padStart(2,'0')}:${String(ge.getUTCMinutes()).padStart(2,'0')}`;
 
                 setSelectedSlot({ 
                   courtId: courts[0]?.id || 1, 
-                  courtName: courts[0]?.name || 'კორტი 1', 
-                  time: utcForStorage.toISOString()
+                  courtName: courts[0]?.name || 'კორტი 1',
+                  time: null,
+                  slotDate,
+                  slotTime
                 });
                 setIsModalOpen(true);
               }}
