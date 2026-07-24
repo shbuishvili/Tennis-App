@@ -685,8 +685,8 @@ export default function App() {
       racketsExcluded,
       racketsTotal: racketsIncluded + racketsExcluded,
       racketsPct: (racketsIncluded + racketsExcluded) > 0 
-        ? Math.round((racketsIncluded / (racketsIncluded + racketsExcluded)) * 100) 
-        : 0, // default visual placeholder if empty
+        ? Math.round((racketsExcluded / (racketsIncluded + racketsExcluded)) * 100) 
+        : 0, // tracking rental demand (racketsExcluded)
       occupancyRate
     };
   };
@@ -922,8 +922,8 @@ export default function App() {
           </div>
 
           <div className="header-actions">
-            {/* Quick date control for Calendar */}
-            {activeTab === 'calendar' && (
+            {/* Quick date control for Calendar and Dashboard */}
+            {(activeTab === 'calendar' || activeTab === 'dashboard') && (
               <div className="date-controls flex-align glass-panel">
                 <button 
                   onClick={() => setSelectedDate(new Date(selectedDate.getTime() - 24*60*60*1000))} 
