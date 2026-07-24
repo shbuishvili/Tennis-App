@@ -647,12 +647,12 @@ export default function App() {
     const blockedSlotsCount = todayBookings.filter(b => b.is_blocked).length;
     
     // Count rackets rented
-    let racketsIncluded = 0;
-    let racketsExcluded = 0;
+    let racketsIncluded = 0; // own racket
+    let racketsExcluded = 0; // rented
     todayBookings.forEach(b => {
       if (!b.is_blocked) {
         if (b.rackets_status === 'included') racketsIncluded++;
-        else racketsExcluded++;
+        else racketsExcluded++; // catch both 'rented' and legacy 'excluded'
       }
     });
 
@@ -1069,14 +1069,14 @@ export default function App() {
                       <div className="legend-item flex-align">
                         <span className="legend-dot volt"></span>
                         <div className="legend-details">
-                          <span className="legend-label">Included (ჩოგნით)</span>
+                          <span className="legend-label">Included (თავისი აქვთ)</span>
                           <span className="legend-value">{stats.racketsIncluded} ჯავშანი ({stats.racketsTotal > 0 ? stats.racketsPct : 0}%)</span>
                         </div>
                       </div>
                       <div className="legend-item flex-align">
                         <span className="legend-dot dark"></span>
                         <div className="legend-details">
-                          <span className="legend-label">Excluded (თავისი ჩოგნით)</span>
+                          <span className="legend-label">Rented (ნაქირავები)</span>
                           <span className="legend-value">{stats.racketsExcluded} ჯავშანი ({stats.racketsTotal > 0 ? (100 - stats.racketsPct) : 0}%)</span>
                         </div>
                       </div>
@@ -1121,7 +1121,7 @@ export default function App() {
                                   <span className="timeline-court">{court ? court.name : 'წაშლილი კორტი'}</span>
                                   {!b.is_blocked && (
                                     <span className={`racket-badge ${b.rackets_status}`}>
-                                      🎾 {b.rackets_status === 'included' ? 'ჩოგნით' : 'თავისი ჩოგანი'}
+                                      🎾 {b.rackets_status === 'included' ? 'თავისი ჩოგანი' : 'ნაქირავები'}
                                     </span>
                                   )}
                                 </div>
@@ -1239,7 +1239,7 @@ export default function App() {
                                         <span className="cell-room-no">ოთახი {booking.room_number}</span>
                                         <span className="cell-name-txt">{booking.full_name}</span>
                                         <span className={`cell-racket-indicator ${booking.rackets_status}`}>
-                                          {booking.rackets_status === 'included' ? '🎾 Included' : 'Excluded'}
+                                          {booking.rackets_status === 'included' ? '🎾 Included (თავისი აქვთ)' : 'Rented (ნაქირავები)'}
                                         </span>
                                       </>
                                     )}
