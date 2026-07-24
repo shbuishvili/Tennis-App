@@ -25,6 +25,28 @@ import {
   Key
 } from 'lucide-react';
 
+const TennisRacketIcon = ({ size = 24, className = "" }) => (
+  <svg 
+    width={size} 
+    height={size} 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    className={className}
+  >
+    <ellipse cx="12" cy="8" rx="5" ry="6" />
+    <line x1="12" y1="2" x2="12" y2="14" />
+    <line x1="7" y1="8" x2="17" y2="8" />
+    <line x1="8.5" y1="5" x2="15.5" y2="5" />
+    <line x1="8.5" y1="11" x2="15.5" y2="11" />
+    <line x1="12" y1="14" x2="12" y2="22" />
+    <path d="M10 22h4" />
+  </svg>
+);
+
 const DEFAULT_COURTS = [
   { id: 1, name: 'კორტი 1 (Clay)', type: 'Clay', is_active: true, status: 'active' },
   { id: 2, name: 'კორტი 2 (Hard)', type: 'Hard', is_active: true, status: 'active' },
@@ -585,7 +607,7 @@ export default function App() {
       {/* Sidebar Navigation */}
       <aside className="sidebar glass-panel">
         <div className="sidebar-logo">
-          <Trophy size={28} className="text-volt animate-spin-slow" />
+          <TennisRacketIcon size={28} className="text-volt animate-spin-slow" />
           <h2>TENNIS PORTAL</h2>
         </div>
 
@@ -666,7 +688,7 @@ export default function App() {
           <div className="db-status flex-align margin-bottom-sm">
             <span className={`status-indicator ${isSupabaseConnected ? 'connected' : 'local'}`}></span>
             <span className="text-xs">
-              {isSupabaseConnected ? 'Supabase Connected' : 'Local Storage Mode'}
+              {isSupabaseConnected ? 'Connected' : 'Local Storage Mode'}
             </span>
           </div>
           <button className="btn btn-danger btn-xs width-100 flex-align justify-center" onClick={handleSignOut}>
