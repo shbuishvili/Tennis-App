@@ -86,7 +86,7 @@ export default function BookingModal({
           <h3>
             {existingBooking ? 'ჯავშნის რედაქტირება' : 'ახალი დაჯავშნა'}
             <span className="modal-court-badge">
-              {selectedSlot ? `კორტი ${selectedSlot.courtId}` : ''}
+              {selectedSlot ? (selectedSlot.courtName || `კორტი ${selectedSlot.courtId}`) : ''}
             </span>
           </h3>
           <button className="modal-close-btn" onClick={onClose}>
