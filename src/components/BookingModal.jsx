@@ -60,14 +60,16 @@ export default function BookingModal({
     if (existingBooking) {
       setFullName(existingBooking.full_name || '');
       setRoomNumber(existingBooking.room_number || '');
-      // Parse existing start time as Georgia local
-      const startGe = new Date(new Date(existingBooking.start_time).getTime() + 4 * 3600000 - new Date().getTimezoneOffset() * 60000);
-      // Use raw UTC + 4h offset trick
-      const startUtcMs = new Date(existingBooking.start_time).getTime();
-      const georgiaStartMs = startUtcMs + 4 * 3600000;
-      const georgiaStart = new Date(georgiaStartMs);
-      setStartDate(toInputDate(georgiaStart));
-      setStartTime(toInputTime(georgiaStart));
+      // Use slotDate/slotTime if provided by handleSlotClick (already decoded as Georgia local)
+      if (selectedSlot?.slotDate && selectedSlot?.slotTime) {
+        setStartDate(selectedSlot.slotDate);
+        setStartTime(selectedSlot.slotTime);
+      } else {
+        // Fallback: decode UTC ISO → Georgia local using UTC methods (browser-timezone-safe)
+        const ge = new Date(new Date(existingBooking.start_time).getTime() + 4 * 3600000);
+        setStartDate(`${ge.getUTCFullYear()}-${String(ge.getUTCMonth()+1).padStart(2,'0')}-${String(ge.getUTCDate()).padStart(2,'0')}`);
+        setStartTime(`${String(ge.getUTCHours()).padStart(2,'0')}:${String(ge.getUTCMinutes()).padStart(2,'0')}`);
+      }
       const diffMs = new Date(existingBooking.end_time) - new Date(existingBooking.start_time);
       setDuration(diffMs / 3600000 || 1);
       setRacketsStatus(existingBooking.rackets_status || 'excluded');
@@ -76,15 +78,12 @@ export default function BookingModal({
     } else {
       setFullName('');
       setRoomNumber('');
-      // Default: use selectedSlot time (already passed as UTC+4 correct ISO)
-      // or fall back to current Georgia time
-      if (selectedSlot?.time) {
-        const slotUtcMs = new Date(selectedSlot.time).getTime();
-        const georgiaSlotMs = slotUtcMs + 4 * 3600000;
-        const georgiaSlot = new Date(georgiaSlotMs);
-        setStartDate(toInputDate(georgiaSlot));
-        setStartTime(toInputTime(georgiaSlot));
+      // Use slotDate/slotTime strings if available (passed directly from calendar click or new button)
+      if (selectedSlot?.slotDate && selectedSlot?.slotTime) {
+        setStartDate(selectedSlot.slotDate);
+        setStartTime(selectedSlot.slotTime);
       } else {
+        // Fallback: current Georgia time
         const ge = getGeorgiaNow();
         setStartDate(toInputDate(ge));
         setStartTime(toInputTime(ge));
@@ -253,8 +252,8 @@ export default function BookingModal({
           {/* Editable date + time fields */}
           <div className="form-group">
             <label className="form-label">
-              <Clock size={14} className="margin-right-xs text-muted" />
-              დაწყების თარიღი და დრო (UTC+4 საქართველო)
+              <Clock size={14} className="margin-right-xs text-muted" style={{display:'inline', verticalAlign:'middle'}} />
+              თარიღი და დრო
             </label>
             <div className="datetime-row">
               <input
