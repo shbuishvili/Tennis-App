@@ -2,6 +2,28 @@ import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { Shield, Key, User, HelpCircle, Trophy } from 'lucide-react';
 
+const TennisRacketIcon = ({ size = 24, className = "" }) => (
+  <svg 
+    width={size} 
+    height={size} 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round" 
+    className={className}
+  >
+    <ellipse cx="12" cy="8" rx="5" ry="6" />
+    <line x1="12" y1="2" x2="12" y2="14" />
+    <line x1="7" y1="8" x2="17" y2="8" />
+    <line x1="8.5" y1="5" x2="15.5" y2="5" />
+    <line x1="8.5" y1="11" x2="15.5" y2="11" />
+    <line x1="12" y1="14" x2="12" y2="22" />
+    <path d="M10 22h4" />
+  </svg>
+);
+
 const LOCAL_ACCOUNTS = [
   { username: 'admin', password: 'admin123', role: 'super_admin', full_name: 'სუპერ ადმინისტრატორი' },
   { username: 'manager', password: 'manager123', role: 'manager', full_name: 'მთავარი მენეჯერი' },
@@ -76,9 +98,9 @@ export default function Login({ onLoginSuccess, isSupabaseConnected }) {
     <div className="login-overlay">
       <div className="login-card glass-panel">
         <div className="login-logo-box">
-          <Trophy size={40} className="text-volt animate-spin-slow" />
-          <h2>კორტების მართვის პორტალი</h2>
-          <p className="text-xs text-secondary">სისტემაში შესვლა პერსონალისთვის</p>
+          <TennisRacketIcon size={44} className="text-volt animate-spin-slow" />
+          <h2>კორტების ჯავშნის პორტალი</h2>
+          <p className="text-xs text-secondary">სისტემაში შესვლა</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
