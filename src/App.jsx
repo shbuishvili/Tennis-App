@@ -2511,21 +2511,33 @@ export default function App() {
             font-size: 16px !important;
           }
 
-          .tab-view-container {
-            padding: 12px;
+          .main-content {
+            width: 100%;
+            max-width: 100vw;
+            min-width: 0;
+            overflow-x: hidden;
+            box-sizing: border-box;
           }
 
-          .settings-card {
+          .tab-view-container {
+            padding: 12px;
+            width: 100%;
+            max-width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
+          }
+
+          .settings-card, .dashboard-card, .customers-main, .profile-card-container {
             padding: 16px;
+            min-width: 0;
+            max-width: 100%;
+            box-sizing: border-box;
           }
 
           .profile-view {
             padding-top: 16px;
             width: 100%;
-          }
-
-          .profile-card-container {
-            padding: 16px;
+            min-width: 0;
             max-width: 100%;
           }
 
