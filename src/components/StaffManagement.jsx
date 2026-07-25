@@ -410,11 +410,13 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
           font-size: 0.75rem;
           text-transform: uppercase;
           border-bottom: 1px solid var(--border-color);
+          white-space: nowrap;
         }
         .staff-table td {
           padding: 12px 14px;
           border-bottom: 1px solid var(--border-color);
           font-size: 0.85rem;
+          white-space: nowrap;
         }
         .staff-table tr:last-child td { border-bottom: none; }
 
@@ -424,6 +426,10 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
           border-radius: 20px;
           font-weight: 600;
           border: 1px solid transparent;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          white-space: nowrap;
         }
         .role-tag.role-super_admin {
           background: rgba(204, 255, 0, 0.1);
