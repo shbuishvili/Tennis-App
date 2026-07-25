@@ -521,23 +521,21 @@ export default function App() {
     }
   };
 
-  // Delete court closure rule
-  const handleDeleteClosure = async (closureId) => {
-    if (!window.confirm('ნამდვილად გსურთ ამ ჩაკეტვის გაუქმება და კორტის გახსნა?')) return;
-
+  // Delete court closure rules (batch)
+  const handleDeleteClosures = async (closureIds) => {
     setLoading(true);
     try {
       if (isSupabaseConnected) {
         const { error } = await supabase
           .from('court_closures')
           .delete()
-          .eq('id', closureId);
+          .in('id', closureIds);
         if (error) throw error;
 
         const { data } = await supabase.from('court_closures').select('*');
         setCourtClosures(data || []);
       } else {
-        const updatedClosures = courtClosures.filter(c => c.id !== closureId);
+        const updatedClosures = courtClosures.filter(c => !closureIds.includes(c.id));
         setCourtClosures(updatedClosures);
         localStorage.setItem('court_closures', JSON.stringify(updatedClosures));
       }
@@ -1566,9 +1564,7 @@ export default function App() {
                                   className="btn btn-danger btn-xs flex-align btn-delete-court"
                                   onClick={async () => {
                                     if (!window.confirm('ნამდვილად გსურთ ამ ჩაკეტვის გაუქმება?')) return;
-                                    for (const id of group.ids) {
-                                      await handleDeleteClosure(id);
-                                    }
+                                    await handleDeleteClosures(group.ids);
                                   }}
                                 >
                                   <Trash2 size={12} />
