@@ -44,7 +44,8 @@ export default function BookingModal({
   onDelete, 
   selectedSlot, 
   existingBooking,
-  currentUser
+  currentUser,
+  courts = []
 }) {
   const [fullName, setFullName] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
@@ -56,11 +57,13 @@ export default function BookingModal({
   const [isBlocked, setIsBlocked] = useState(false);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+  const [selectedCourtId, setSelectedCourtId] = useState(1);
 
   useEffect(() => {
     if (existingBooking) {
       setFullName(existingBooking.full_name || '');
       setRoomNumber(existingBooking.room_number || '');
+      setSelectedCourtId(existingBooking.court_id || 1);
       // Use slotDate/slotTime if provided by handleSlotClick (already decoded as Georgia local)
       if (selectedSlot?.slotDate && selectedSlot?.slotTime) {
         setStartDate(selectedSlot.slotDate);
@@ -84,6 +87,7 @@ export default function BookingModal({
     } else {
       setFullName('');
       setRoomNumber('');
+      setSelectedCourtId(selectedSlot?.courtId || 1);
       // Use slotDate/slotTime strings if available (passed directly from calendar click or new button)
       if (selectedSlot?.slotDate && selectedSlot?.slotTime) {
         setStartDate(selectedSlot.slotDate);
@@ -129,7 +133,7 @@ export default function BookingModal({
     const endISO = new Date(startMs + duration * 3600000).toISOString();
 
     const bookingData = {
-      court_id: selectedSlot?.courtId,
+      court_id: selectedCourtId,
       full_name: isBlocked ? 'ადმინისტრაციული ბლოკი' : fullName.trim(),
       room_number: isBlocked ? 'BLOCKED' : roomNumber.trim(),
       start_time: startISO,
@@ -154,7 +158,7 @@ export default function BookingModal({
           <h3>
             {existingBooking ? 'ჯავშნის რედაქტირება' : 'ახალი დაჯავშნა'}
             <span className="modal-court-badge">
-              {selectedSlot ? (selectedSlot.courtName || `კორტი ${selectedSlot.courtId}`) : ''}
+              {courts.find(c => c.id === selectedCourtId)?.name || `კორტი ${selectedCourtId}`}
             </span>
           </h3>
           <button className="modal-close-btn" onClick={onClose}>
@@ -164,6 +168,20 @@ export default function BookingModal({
 
         <form onSubmit={handleSubmit} className="modal-form">
           {error && <div className="form-error">{error}</div>}
+
+          {/* Court Selection */}
+          <div className="form-group">
+            <label className="form-label">კორტი</label>
+            <select 
+              className="form-input" 
+              value={selectedCourtId} 
+              onChange={(e) => setSelectedCourtId(Number(e.target.value))}
+            >
+              {courts.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
 
           {/* Block Court Toggle (Only for managers and super admins) */}
           {currentUser?.role !== 'staff' && (
