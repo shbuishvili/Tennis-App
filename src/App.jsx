@@ -267,6 +267,30 @@ export default function App() {
   // Sync bookings
   const handleSaveBooking = async (bookingData) => {
     setLoading(true);
+
+    // Overlap check
+    const newStart = new Date(bookingData.start_time).getTime();
+    const newEnd = new Date(bookingData.end_time).getTime();
+    
+    const hasOverlap = bookings.some(b => {
+      // Don't compare with itself if editing
+      if (bookingData.id && b.id === bookingData.id) return false;
+      // Only check same court
+      if (b.court_id !== bookingData.court_id) return false;
+      
+      const existingStart = new Date(b.start_time).getTime();
+      const existingEnd = new Date(b.end_time).getTime();
+      
+      // A overlaps B if (StartA < EndB) and (EndA > StartB)
+      return newStart < existingEnd && newEnd > existingStart;
+    });
+
+    if (hasOverlap) {
+      alert("შეცდომა: არჩეული დრო უკვე დაკავებულია ამ კორტზე. გთხოვთ შეცვალოთ დრო.");
+      setLoading(false);
+      return;
+    }
+
     try {
       if (isSupabaseConnected) {
         if (bookingData.id) {
