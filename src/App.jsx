@@ -673,8 +673,11 @@ export default function App() {
     let racketsExcluded = 0; // rented
     todayBookings.forEach(b => {
       if (!b.is_blocked) {
-        if (b.rackets_status === 'included') racketsIncluded++;
-        else racketsExcluded++; // catch both 'rented' and legacy 'excluded'
+        if (b.rackets_status === 'included') {
+          racketsIncluded += 2; // assume they brought at least 2
+        } else {
+          racketsExcluded += (b.rackets_count || 2);
+        }
       }
     });
 
@@ -1091,15 +1094,15 @@ export default function App() {
                       <div className="legend-item flex-align">
                         <span className="legend-dot volt"></span>
                         <div className="legend-details">
-                          <span className="legend-label">Included (თავისი აქვთ)</span>
-                          <span className="legend-value">{stats.racketsIncluded} ჯავშანი ({stats.racketsTotal > 0 ? stats.racketsPct : 0}%)</span>
+                          <span className="legend-label">Rented (ნაქირავები)</span>
+                          <span className="legend-value">{stats.racketsExcluded} ცალი ({stats.racketsTotal > 0 ? stats.racketsPct : 0}%)</span>
                         </div>
                       </div>
                       <div className="legend-item flex-align">
                         <span className="legend-dot dark"></span>
                         <div className="legend-details">
-                          <span className="legend-label">Rented (ნაქირავები)</span>
-                          <span className="legend-value">{stats.racketsExcluded} ჯავშანი ({stats.racketsTotal > 0 ? (100 - stats.racketsPct) : 0}%)</span>
+                          <span className="legend-label">Included (თავისი აქვთ)</span>
+                          <span className="legend-value">{stats.racketsIncluded} ცალი ({stats.racketsTotal > 0 ? (100 - stats.racketsPct) : 0}%)</span>
                         </div>
                       </div>
                     </div>
