@@ -268,6 +268,17 @@ export default function App() {
   const handleSaveBooking = async (bookingData) => {
     setLoading(true);
 
+    // Court closure / maintenance check
+    const court = courts.find(c => c.id === bookingData.court_id);
+    const bookingDate = new Date(bookingData.start_time);
+    const closure = getCourtClosureForDate(bookingData.court_id, bookingDate);
+
+    if (court?.status === 'maintenance' || closure) {
+      alert(`შეცდომა: კორტი დაკეტილია (${closure ? closure.reason : 'სარემონტო სამუშაოების გამო'}) არჩეულ დღეს!`);
+      setLoading(false);
+      return;
+    }
+
     // Overlap check
     const newStart = new Date(bookingData.start_time).getTime();
     const newEnd = new Date(bookingData.end_time).getTime();
@@ -1665,6 +1676,7 @@ export default function App() {
         selectedSlot={selectedSlot}
         existingBooking={selectedBooking}
         currentUser={currentUser}
+        courts={courts}
       />
 
       <style>{`
