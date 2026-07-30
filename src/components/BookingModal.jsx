@@ -52,6 +52,7 @@ export default function BookingModal({
   const [startTime, setStartTime] = useState('');
   const [duration, setDuration] = useState(1); // in hours: 1, 1.5, 2
   const [racketsStatus, setRacketsStatus] = useState('included');
+  const [racketsCount, setRacketsCount] = useState(2);
   const [isBlocked, setIsBlocked] = useState(false);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
@@ -76,6 +77,7 @@ export default function BookingModal({
       // Convert old DB value 'excluded' to 'rented' for UI, otherwise use DB value
       const status = existingBooking.rackets_status || 'included';
       setRacketsStatus(status === 'excluded' ? 'rented' : status);
+      setRacketsCount(existingBooking.rackets_count || 2);
       
       setIsBlocked(existingBooking.is_blocked || false);
       setNotes(existingBooking.notes || '');
@@ -94,6 +96,7 @@ export default function BookingModal({
       }
       setDuration(1);
       setRacketsStatus('included');
+      setRacketsCount(2);
       setIsBlocked(false);
       setNotes('');
     }
@@ -132,6 +135,7 @@ export default function BookingModal({
       start_time: startISO,
       end_time: endISO,
       rackets_status: isBlocked ? 'included' : racketsStatus,
+      rackets_count: isBlocked ? 0 : racketsCount,
       is_blocked: isBlocked,
       notes: notes
     };
@@ -249,6 +253,20 @@ export default function BookingModal({
                     Rented (ნაქირავები)
                   </button>
                 </div>
+                {racketsStatus === 'rented' && (
+                  <div className="margin-top-sm animate-fade-in flex-align">
+                    <span className="text-sm text-secondary margin-right-sm">რაოდენობა:</span>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max="10" 
+                      value={racketsCount} 
+                      onChange={(e) => setRacketsCount(parseInt(e.target.value) || 0)} 
+                      className="form-input" 
+                      style={{ width: '80px', padding: '6px 12px' }}
+                    />
+                  </div>
+                )}
               </div>
             </>
           )}
