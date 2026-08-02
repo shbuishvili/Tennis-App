@@ -108,13 +108,23 @@ export default function EquestrianCalendar({
                        )
                     })}
                     {startBookings.length === 0 && activeBookings.length > 0 && (
-                       <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', alignSelf: 'center', width: '100%', textAlign: 'center' }}>
-                         (მიმდინარეობს ჯავშანი: ცხენი {usedHorses}, პონი {usedPonies})
+                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', justifyContent: 'center' }}>
+                         <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', textAlign: 'center' }}>
+                           (მიმდინარეობს ჯავშანი: ცხენი {usedHorses}, პონი {usedPonies})
+                         </div>
+                         <div style={{ border: '1px dashed rgba(255,255,255,0.2)', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '12px', padding: '4px', cursor: 'pointer' }}>
+                           + დამატება
+                         </div>
                        </div>
                     )}
                     {startBookings.length < maxBookingsPerSlot && startBookings.length > 0 && (
-                       <div style={{ flex: 1, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '12px' }}>
+                       <div style={{ flex: 1, border: '1px dashed rgba(255,255,255,0.2)', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '12px', cursor: 'pointer' }}>
                          + დამატება
+                       </div>
+                    )}
+                    {startBookings.length === 0 && activeBookings.length === 0 && (
+                       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                         <span className="cell-plus-icon">+</span>
                        </div>
                     )}
                   </div>
