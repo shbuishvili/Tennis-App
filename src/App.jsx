@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 
 import Analytics from './components/Analytics';
+import EquestrianCalendar from './components/EquestrianCalendar';
 
 const DEFAULT_COURTS = [
   { id: 1, name: 'კორტი 1 (Clay)', type: 'Clay', is_active: true, status: 'active' },
@@ -67,13 +68,17 @@ const TennisRacketIcon = ({ size = 24, className = "" }) => (
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'calendar', 'customers', 'staff', 'settings', 'profile', 'analytics'
+  const [activeDepartment, setActiveDepartment] = useState('tennis'); // 'tennis' or 'equestrian'
   const [courts, setCourts] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [settings, setSettings] = useState([]);
   const [globalSettings, setGlobalSettings] = useState({ 
     total_rackets: '20',
     allow_manager_analytics: 'true',
-    allow_staff_analytics: 'false'
+    allow_staff_analytics: 'false',
+    eq_max_bookings_per_slot: '2',
+    eq_max_horses_per_slot: '6',
+    eq_max_ponies_per_slot: '3'
   });
   const [courtClosures, setCourtClosures] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
@@ -119,6 +124,9 @@ export default function App() {
       } else {
         setActiveTab('dashboard');
       }
+      if (parsedUser.department === 'equestrian') {
+        setActiveDepartment('equestrian');
+      }
     } else {
       setActiveTab('login');
     }
@@ -153,7 +161,10 @@ export default function App() {
           const gSettings = { 
             total_rackets: '20',
             allow_manager_analytics: 'true',
-            allow_staff_analytics: 'false'
+            allow_staff_analytics: 'false',
+            eq_max_bookings_per_slot: '2',
+            eq_max_horses_per_slot: '6',
+            eq_max_ponies_per_slot: '3'
           };
           dbGlobal.forEach(s => {
             gSettings[s.key] = s.value;
@@ -201,7 +212,10 @@ export default function App() {
           const defGlobal = { 
             total_rackets: '20',
             allow_manager_analytics: 'true',
-            allow_staff_analytics: 'false'
+            allow_staff_analytics: 'false',
+            eq_max_bookings_per_slot: '2',
+            eq_max_horses_per_slot: '6',
+            eq_max_ponies_per_slot: '3'
           };
           setGlobalSettings(defGlobal);
           localStorage.setItem('global_settings', JSON.stringify(defGlobal));
@@ -354,69 +368,148 @@ export default function App() {
   const handleSaveBooking = async (bookingData) => {
     setLoading(true);
 
-    // Court closure / maintenance check
-    const court = courts.find(c => c.id === bookingData.court_id);
-    const bookingDate = new Date(bookingData.start_time);
-    const closure = getCourtClosureForDate(bookingData.court_id, bookingDate);
+    // Court closure / maintenance check (TENNIS ONLY)
+    let court = null;
+    if (bookingData.activity_type !== 'equestrian') {
+      court = courts.find(c => c.id === bookingData.court_id);
+      const bookingDate = new Date(bookingData.start_time);
+      const closure = getCourtClosureForDate(bookingData.court_id, bookingDate);
 
-    if (court?.status === 'maintenance' || closure) {
-      alert(`შეცდომა: კორტი დაკეტილია (${closure ? closure.reason : 'სარემონტო სამუშაოების გამო'}) არჩეულ დღეს!`);
-      setLoading(false);
-      return;
+      if (court?.status === 'maintenance' || closure) {
+        alert(`შეცდომა: კორტი დაკეტილია (${closure ? closure.reason : 'სარემონტო სამუშაოების გამო'}) არჩეულ დღეს!`);
+        setLoading(false);
+        return;
+      }
     }
 
-    // Overlap check
-    const newStart = new Date(bookingData.start_time).getTime();
-    const newEnd = new Date(bookingData.end_time).getTime();
-    
-    const hasOverlap = bookings.some(b => {
-      // Don't compare with itself if editing
-      if (bookingData.id && b.id === bookingData.id) return false;
-      // Only check same court
-      if (b.court_id !== bookingData.court_id) return false;
+    // Overlap check (TENNIS ONLY)
+    if (bookingData.activity_type !== 'equestrian') {
+      const newStart = new Date(bookingData.start_time).getTime();
+      const newEnd = new Date(bookingData.end_time).getTime();
       
-      const existingStart = new Date(b.start_time).getTime();
-      const existingEnd = new Date(b.end_time).getTime();
-      
-      // A overlaps B if (StartA < EndB) and (EndA > StartB)
-      return newStart < existingEnd && newEnd > existingStart;
-    });
+      const hasOverlap = bookings.some(b => {
+        // Don't compare with itself if editing
+        if (bookingData.id && b.id === bookingData.id) return false;
+        // Only check same court
+        if (b.court_id !== bookingData.court_id) return false;
+        
+        const existingStart = new Date(b.start_time).getTime();
+        const existingEnd = new Date(b.end_time).getTime();
+        
+        // A overlaps B if (StartA < EndB) and (EndA > StartB)
+        return newStart < existingEnd && newEnd > existingStart;
+      });
 
-    if (hasOverlap) {
-      alert("შეცდომა: არჩეული დრო უკვე დაკავებულია ამ კორტზე. გთხოვთ შეცვალოთ დრო.");
-      setLoading(false);
-      return;
-    }
+      if (hasOverlap) {
+        alert("შეცდომა: არჩეული დრო უკვე დაკავებულია ამ კორტზე. გთხოვთ შეცვალოთ დრო.");
+        setLoading(false);
+        return;
+      }
 
-    // Rackets Inventory Check
-    if (bookingData.rackets_status === 'rented') {
-      const requestedRackets = bookingData.rackets_count || 2;
-      const totalAvailableRackets = parseInt(globalSettings.total_rackets || '20', 10);
-      
-      // We need to check every 30-min interval from newStart to newEnd
-      let inventoryExceeded = false;
-      for (let time = newStart; time < newEnd; time += 30 * 60 * 1000) {
-        // Find all other bookings active at this exact 30-min slot
-        let rentedAtThisTime = 0;
-        bookings.forEach(b => {
-          if (b.is_blocked || (bookingData.id && b.id === bookingData.id)) return;
-          if (b.rackets_status === 'rented') {
-            const bStart = new Date(b.start_time).getTime();
-            const bEnd = new Date(b.end_time).getTime();
-            if (time >= bStart && time < bEnd) {
-              rentedAtThisTime += (b.rackets_count || 2);
+      // Rackets Inventory Check
+      if (bookingData.rackets_status === 'rented') {
+        const requestedRackets = bookingData.rackets_count || 2;
+        const totalAvailableRackets = parseInt(globalSettings.total_rackets || '20', 10);
+        
+        // We need to check every 30-min interval from newStart to newEnd
+        let inventoryExceeded = false;
+        for (let time = newStart; time < newEnd; time += 30 * 60 * 1000) {
+          // Find all other bookings active at this exact 30-min slot
+          let rentedAtThisTime = 0;
+          bookings.forEach(b => {
+            if (b.is_blocked || (bookingData.id && b.id === bookingData.id)) return;
+            if (b.rackets_status === 'rented') {
+              const bStart = new Date(b.start_time).getTime();
+              const bEnd = new Date(b.end_time).getTime();
+              if (time >= bStart && time < bEnd) {
+                rentedAtThisTime += (b.rackets_count || 2);
+              }
             }
+          });
+          
+          if (rentedAtThisTime + requestedRackets > totalAvailableRackets) {
+            inventoryExceeded = true;
+            break;
+          }
+        }
+        
+        if (inventoryExceeded) {
+          alert(`შეცდომა: ამ საათებში საკმარისი თავისუფალი ჩოგანი არ არის. სულ გვაქვს ${totalAvailableRackets} ჩოგანი.`);
+          setLoading(false);
+          return;
+        }
+      }
+    } else {
+      // --- EQUESTRIAN CHECKS ---
+      const newStart = new Date(bookingData.start_time).getTime();
+      const newEnd = new Date(bookingData.end_time).getTime();
+      
+      const maxEqBookings = parseInt(globalSettings.eq_max_bookings_per_slot || 2);
+      const maxHorses = parseInt(globalSettings.eq_max_horses_per_slot || 6);
+      const maxPonies = parseInt(globalSettings.eq_max_ponies_per_slot || 3);
+      
+      const reqHorses = bookingData.horses_count || 0;
+      const reqPonies = bookingData.ponies_count || 0;
+
+      // 1. Check break time (14:00 - 15:00)
+      for (let time = newStart; time < newEnd; time += 30 * 60 * 1000) {
+        const h = new Date(time).getHours();
+        if (h === 14) {
+          alert('შეცდომა: 14:00-დან 15:00-მდე შესვენებაა. ამ დროში ჯავშანი არ შეიძლება.');
+          setLoading(false);
+          return;
+        }
+      }
+
+      // 2. Check limits for every 30-min interval
+      let limitExceeded = false;
+      let limitMsg = '';
+
+      for (let time = newStart; time < newEnd; time += 30 * 60 * 1000) {
+        let activeBookingsCount = 0;
+        let activeHorsesCount = 0;
+        let activePoniesCount = 0;
+
+        bookings.forEach(b => {
+          if (b.activity_type !== 'equestrian') return;
+          if (bookingData.id && b.id === bookingData.id) return; // exclude self
+          
+          const bStart = new Date(b.start_time).getTime();
+          const bEnd = new Date(b.end_time).getTime();
+          
+          // Count active resource at this time
+          if (time >= bStart && time < bEnd) {
+            activeHorsesCount += (b.horses_count || 0);
+            activePoniesCount += (b.ponies_count || 0);
+          }
+          
+          // Count bookings starting EXACTLY at this time (since the 2 booking limit applies to the start time)
+          // Wait, the rule is "in the same time slot we have a limit of 2 bookings". 
+          // If a booking is 2 hours long, does it prevent new bookings? Yes, it consumes resources, but the limit of 2 bookings per slot usually means "you can only fit 2 parallel tracks". We'll count active parallel bookings.
+          if (time >= bStart && time < bEnd) {
+             activeBookingsCount++;
           }
         });
-        
-        if (rentedAtThisTime + requestedRackets > totalAvailableRackets) {
-          inventoryExceeded = true;
+
+        if (activeBookingsCount >= maxEqBookings) {
+          limitExceeded = true;
+          limitMsg = `შეცდომა: ამ დროს უკვე დაკავებულია ${maxEqBookings} ჯავშანი (ლიმიტი ამოწურულია).`;
+          break;
+        }
+        if (activeHorsesCount + reqHorses > maxHorses) {
+          limitExceeded = true;
+          limitMsg = `შეცდომა: ამ დროს აღარ არის საკმარისი ცხენი. მაქსიმუმ დასაშვებია ${maxHorses}.`;
+          break;
+        }
+        if (activePoniesCount + reqPonies > maxPonies) {
+          limitExceeded = true;
+          limitMsg = `შეცდომა: ამ დროს აღარ არის საკმარისი პონი. მაქსიმუმ დასაშვებია ${maxPonies}.`;
           break;
         }
       }
-      
-      if (inventoryExceeded) {
-        alert(`შეცდომა: ამ საათებში საკმარისი თავისუფალი ჩოგანი არ არის. სულ გვაქვს ${totalAvailableRackets} ჩოგანი.`);
+
+      if (limitExceeded) {
+        alert(limitMsg);
         setLoading(false);
         return;
       }
@@ -1008,7 +1101,7 @@ export default function App() {
       <aside className="sidebar glass-panel">
         <div className="sidebar-logo">
           <TennisRacketIcon size={28} className="text-volt animate-spin-slow" />
-          <h2>TENNIS PORTAL</h2>
+          <h2>ADVENTURE BOOKINGS</h2>
         </div>
 
         {/* Profile Card in Sidebar */}
@@ -1115,7 +1208,8 @@ export default function App() {
           <div className="header-title-area">
             <h1>
               {activeTab === 'dashboard' && 'ადმინისტრატორის პანელი'}
-              {activeTab === 'calendar' && 'კორტების განრიგი'}
+              {activeTab === 'calendar' && activeDepartment === 'tennis' && 'კორტების განრიგი'}
+              {activeTab === 'calendar' && activeDepartment === 'equestrian' && 'საჯინიბოს განრიგი'}
               {activeTab === 'customers' && 'სტუმრების აღრიცხვა'}
               {activeTab === 'staff' && 'თანამშრომელთა მართვა'}
               {activeTab === 'settings' && 'კორტების პარამეტრები'}
@@ -1344,6 +1438,34 @@ export default function App() {
           {/* 2. CALENDAR/SCHEDULER VIEW */}
           {activeTab === 'calendar' && (
             <div className="calendar-view animate-fade-in">
+              
+              {/* Department Switcher */}
+              {currentUser?.department === 'all' && (
+                <div className="department-switcher flex-align" style={{ marginBottom: '16px', gap: '8px' }}>
+                  <button 
+                    className={`btn ${activeDepartment === 'tennis' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setActiveDepartment('tennis')}
+                  >
+                    🎾 ტენისი
+                  </button>
+                  <button 
+                    className={`btn ${activeDepartment === 'equestrian' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setActiveDepartment('equestrian')}
+                  >
+                    🐴 საჯინიბო
+                  </button>
+                </div>
+              )}
+
+              {activeDepartment === 'equestrian' ? (
+                <EquestrianCalendar 
+                  selectedDate={selectedDate}
+                  bookings={bookings}
+                  globalSettings={globalSettings}
+                  onSlotClick={(time, existingBooking) => handleSlotClick(null, time, 'active', null, existingBooking)}
+                />
+              ) : (
+                <>
               {/* Mobile Court Selector Tabs (Slide 3/10) */}
               <div className="mobile-court-tabs">
                 {courts.map(court => {
@@ -1461,6 +1583,8 @@ export default function App() {
                   ))}
                 </div>
               </div>
+              </>
+              )}
             </div>
           )}
 
