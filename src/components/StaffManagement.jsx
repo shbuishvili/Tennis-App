@@ -25,6 +25,13 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
   const [resetError, setResetError] = useState('');
   const [resetSuccess, setResetSuccess] = useState('');
 
+  // States for editing user role/department
+  const [selectedUserForEdit, setSelectedUserForEdit] = useState(null);
+  const [editRole, setEditRole] = useState('staff');
+  const [editDepartment, setEditDepartment] = useState('all');
+  const [editError, setEditError] = useState('');
+  const [editSuccess, setEditSuccess] = useState('');
+
   const fetchUsers = async () => {
     setLoading(true);
     try {
@@ -164,7 +171,39 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
       setSelectedUserForReset(null);
       fetchUsers();
     } catch (err) {
-      setResetError('პაროლის შეცვლისას მოხდა შეცდომა: ' + err.message);
+      setResetError('პოლის შეცვლისას მოხდა შეცდომა: ' + err.message);
+    }
+  };
+
+  const handleEditUser = async (e) => {
+    e.preventDefault();
+    setEditError('');
+    setEditSuccess('');
+
+    try {
+      if (isSupabaseConnected) {
+        const { error } = await supabase
+          .from('user_accounts')
+          .update({ role: editRole, department: editDepartment })
+          .eq('id', selectedUserForEdit.id);
+        
+        if (error) throw error;
+      } else {
+        const updatedUsers = users.map(u => 
+          u.id === selectedUserForEdit.id ? { ...u, role: editRole, department: editDepartment } : u
+        );
+        setUsers(updatedUsers);
+        localStorage.setItem('local_user_accounts', JSON.stringify(updatedUsers));
+      }
+
+      setEditSuccess(`მონაცემები წარმატებით განახლდა`);
+      setTimeout(() => {
+        setSelectedUserForEdit(null);
+        setEditSuccess('');
+      }, 1500);
+      fetchUsers();
+    } catch (err) {
+      setEditError('შეცდომა რედაქტირებისას: ' + err.message);
     }
   };
 
@@ -316,6 +355,20 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
                             <Key size={12} className="margin-right-xs text-volt" />
                             პაროლი
                           </button>
+
+                          <button
+                            className="btn btn-secondary btn-xs flex-align"
+                            onClick={() => {
+                              setSelectedUserForEdit(user);
+                              setEditRole(user.role || 'staff');
+                              setEditDepartment(user.department || 'all');
+                              setEditError('');
+                              setEditSuccess('');
+                            }}
+                          >
+                            <Users size={12} className="margin-right-xs text-volt" />
+                            რედაქტირება
+                          </button>
                           
                           {user.id !== currentUser.id && user.username !== currentUser.username && (
                             <button
@@ -390,7 +443,61 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
         </div>
       )}
 
-      <style>{`
+      {/* Edit User Modal */}
+      {selectedUserForEdit && (
+        <div className="modal-overlay">
+          <div className="modal-content glass-panel">
+            <div className="modal-header">
+              <h3>
+                რედაქტირება
+                <span className="modal-court-badge">
+                  {selectedUserForEdit.username}
+                </span>
+              </h3>
+              <button className="modal-close-btn" onClick={() => setSelectedUserForEdit(null)}>
+                &times;
+              </button>
+            </div>
+            
+            <form onSubmit={handleEditUser} className="modal-form" style={{ marginTop: '20px' }}>
+              {editError && <div className="form-error">{editError}</div>}
+              {editSuccess && <div className="form-success">{editSuccess}</div>}
+
+              <div className="form-group">
+                <label className="form-label">როლი</label>
+                <select
+                  className="form-input select-role-input"
+                  value={editRole}
+                  onChange={(e) => setEditRole(e.target.value)}
+                >
+                  <option value="staff">თანამშრომელი (Staff)</option>
+                  <option value="manager">მენეჯერი (Manager)</option>
+                  <option value="super_admin">სუპერ ადმინი (Super Admin)</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">დეპარტამენტი (წვდომა)</label>
+                <select
+                  className="form-input select-role-input"
+                  value={editDepartment}
+                  onChange={(e) => setEditDepartment(e.target.value)}
+                >
+                  <option value="all">ყველა (ორივე)</option>
+                  <option value="tennis">🎾 მხოლოდ ტენისი</option>
+                  <option value="equestrian">🐴 მხოლოდ საჯინიბო</option>
+                </select>
+              </div>
+
+              <button type="submit" className="btn btn-primary width-100 margin-top-md">
+                შენახვა
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+<style>{`
         .staff-layout {
           display: grid;
           grid-template-columns: 1fr 2fr;
