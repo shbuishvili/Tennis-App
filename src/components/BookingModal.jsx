@@ -261,10 +261,10 @@ export default function BookingModal({
                     }
                   }}
                 >
-                  <option value="walk_1km">1კმ 10-15წთ</option>
-                  <option value="walk_2km">2კმ 25-30წთ</option>
-                  <option value="tour_4km">4.4კმ 45-60წთ</option>
-                  <option value="tour_7km">7კმ 1.5-2სთ</option>
+                  <option value="walk_1km">გასეირნება 1კმ 10-15წთ</option>
+                  <option value="walk_2km">გასეირნება 2კმ 25-30წთ</option>
+                  <option value="tour_4km">მარშრუტი 4.4კმ 45-60წთ</option>
+                  <option value="tour_7km">მარშრუტი 7კმ 1.5-2სთ</option>
                   <option value="pony_walk">პონით გასეირნება 10წთ</option>
                 </select>
               </div>
