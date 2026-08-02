@@ -1132,6 +1132,24 @@ export default function App() {
         </div>
         
         <nav className="sidebar-nav">
+          {/* Global Department Switcher in Sidebar */}
+          {(currentUser?.department === 'all' || !currentUser?.department || currentUser?.role !== 'staff') && (
+            <div className="sidebar-department-switcher">
+              <button 
+                className={`sidebar-dep-btn ${activeDepartment === 'tennis' ? 'active' : ''}`}
+                onClick={() => setActiveDepartment('tennis')}
+              >
+                🎾 ტენისი
+              </button>
+              <button 
+                className={`sidebar-dep-btn ${activeDepartment === 'equestrian' ? 'active' : ''}`}
+                onClick={() => setActiveDepartment('equestrian')}
+              >
+                🐴 საჯინიბო
+              </button>
+            </div>
+          )}
+
           {currentUser.role !== 'staff' && (
             <button 
               className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
@@ -1266,7 +1284,16 @@ export default function App() {
                 const geMs = now.getTime() + now.getTimezoneOffset() * 60000 + 4 * 3600000;
                 const ge = new Date(geMs);
                 const slotDate = `${ge.getUTCFullYear()}-${String(ge.getUTCMonth()+1).padStart(2,'0')}-${String(ge.getUTCDate()).padStart(2,'0')}`;
-                const slotTime = `${String(ge.getUTCHours()).padStart(2,'0')}:${String(ge.getUTCMinutes()).padStart(2,'0')}`;
+                
+                // Round minutes to 00 or 30
+                let mins = ge.getUTCMinutes();
+                if (mins < 15) mins = 0;
+                else if (mins < 45) mins = 30;
+                else {
+                  mins = 0;
+                  ge.setUTCHours(ge.getUTCHours() + 1);
+                }
+                const slotTime = `${String(ge.getUTCHours()).padStart(2,'0')}:${String(mins).padStart(2,'0')}`;
 
                 setSelectedSlot({ 
                   courtId: activeDepartment === 'equestrian' ? null : (courts[0]?.id || 1), 
@@ -1296,24 +1323,6 @@ export default function App() {
         {/* Dynamic Tab Views */}
         <div className="tab-view-container">
           
-          {/* Department Switcher (Global) */}
-          {(currentUser?.department === 'all' || !currentUser?.department || currentUser?.role !== 'staff') && (
-            <div className="department-switcher flex-align" style={{ marginBottom: '16px', gap: '8px' }}>
-              <button 
-                className={`btn ${activeDepartment === 'tennis' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setActiveDepartment('tennis')}
-              >
-                🎾 ტენისი
-              </button>
-              <button 
-                className={`btn ${activeDepartment === 'equestrian' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setActiveDepartment('equestrian')}
-              >
-                🐴 საჯინიბო
-              </button>
-            </div>
-          )}
-
           {/* 1. DASHBOARD VIEW */}
           {activeTab === 'dashboard' && currentUser.role !== 'staff' && (
             <div className="dashboard-view animate-fade-in">
@@ -1451,7 +1460,9 @@ export default function App() {
                   <div className="dashboard-timeline-list">
                     {bookings.filter(b => {
                       const start = new Date(b.start_time);
-                      return start.toDateString() === selectedDate.toDateString();
+                      const isSameDay = start.toDateString() === selectedDate.toDateString();
+                      const isSameDept = b.activity_type === activeDepartment || (!b.activity_type && activeDepartment === 'tennis');
+                      return isSameDay && isSameDept;
                     }).length === 0 ? (
                       <div className="timeline-empty flex-align-center">
                         <Clock size={36} className="text-muted margin-bottom-sm" />
@@ -1461,7 +1472,9 @@ export default function App() {
                       bookings
                         .filter(b => {
                           const start = new Date(b.start_time);
-                          return start.toDateString() === selectedDate.toDateString();
+                          const isSameDay = start.toDateString() === selectedDate.toDateString();
+                          const isSameDept = b.activity_type === activeDepartment || (!b.activity_type && activeDepartment === 'tennis');
+                          return isSameDay && isSameDept;
                         })
                         .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
                         .map(b => {
@@ -1471,16 +1484,24 @@ export default function App() {
                           return (
                             <div key={b.id} className={`timeline-booking-item ${b.is_blocked ? 'blocked' : ''}`}>
                               <span className="timeline-time">{start} - {end}</span>
-                              <div className={`timeline-body ${court?.type === 'Clay' ? 'clay' : 'hard'}`}>
+                              <div className={`timeline-body ${b.activity_type === 'equestrian' ? 'clay' : (court?.type === 'Clay' ? 'clay' : 'hard')}`}>
                                 <div className="timeline-body-title">
                                   <strong>{b.full_name}</strong>
                                   {!b.is_blocked && <span className="timeline-room">ოთახი: {b.room_number}</span>}
                                 </div>
                                 <div className="timeline-body-footer">
-                                  <span className="timeline-court">{court ? court.name : 'წაშლილი კორტი'}</span>
-                                  {!b.is_blocked && (
+                                  <span className="timeline-court">
+                                    {b.activity_type === 'equestrian' ? '🐴 საჯინიბო' : (court ? court.name : 'წაშლილი კორტი')}
+                                  </span>
+                                  {!b.is_blocked && b.activity_type !== 'equestrian' && (
                                     <span className={`racket-badge ${b.rackets_status}`}>
                                       🎾 {b.rackets_status === 'included' ? 'თავისი ჩოგანი' : 'ნაქირავები'}
+                                    </span>
+                                  )}
+                                  {!b.is_blocked && b.activity_type === 'equestrian' && (
+                                    <span className="racket-badge">
+                                      {b.horses_count > 0 && `🐴 ${b.horses_count}`}
+                                      {b.ponies_count > 0 && ` 🐎 ${b.ponies_count}`}
                                     </span>
                                   )}
                                 </div>
@@ -1579,37 +1600,62 @@ export default function App() {
 
                           const booking = getBookingForSlot(court.id, time, selectedDate);
                           
-                          // Check if this time slot is the EXACT start time of the booking
                           let isStartOfBooking = false;
+                          let durationSlots = 1;
+                          let colorClass = '';
+                          
                           if (booking) {
                             const bStart = new Date(booking.start_time);
+                            const bEnd = new Date(booking.end_time);
                             const [slotH, slotM] = time.split(':');
                             const slotTime = new Date(selectedDate);
                             slotTime.setHours(parseInt(slotH), parseInt(slotM), 0, 0);
+                            
                             isStartOfBooking = slotTime.getTime() === bStart.getTime();
+                            
+                            const durationMins = (bEnd.getTime() - bStart.getTime()) / 60000;
+                            durationSlots = durationMins / 30;
+                            
+                            if (durationMins <= 30) colorClass = 'dur-30m';
+                            else if (durationMins <= 60) colorClass = 'dur-1h';
+                            else if (durationMins <= 90) colorClass = 'dur-1h30';
+                            else colorClass = 'dur-2h';
                           }
 
                           return (
                             <div 
                               key={`${court.id}_${time}`} 
                               onClick={() => handleSlotClick(court.id, time, court.status, closure)}
-                              className={`scheduler-grid-cell ${court.type === 'Clay' ? 'cell-clay' : 'cell-hard'} ${booking ? 'occupied' : 'empty'} ${booking?.is_blocked ? 'blocked' : ''} ${isMobileActive ? 'mobile-visible' : 'mobile-hidden'}`}
+                              className={`scheduler-grid-cell ${court.type === 'Clay' ? 'cell-clay' : 'cell-hard'} ${booking ? `occupied ${colorClass}` : 'empty'} ${booking?.is_blocked ? 'blocked' : ''} ${isMobileActive ? 'mobile-visible' : 'mobile-hidden'}`}
                             >
                               {booking ? (
                                 isStartOfBooking && (
-                                  <div className="booking-cell-content">
+                                  <div className="booking-cell-content" style={{
+                                    position: 'absolute',
+                                    top: 0, left: 0, right: 0,
+                                    height: `calc(${durationSlots * 100}% + ${durationSlots - 1}px)`,
+                                    zIndex: 10,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    textAlign: 'center',
+                                    padding: '4px'
+                                  }}>
                                     {booking.is_blocked ? (
-                                      <span className="flex-align">
-                                        <ShieldAlert size={12} className="margin-right-xs text-warning" />
+                                      <span className="flex-align text-warning">
+                                        <ShieldAlert size={12} className="margin-right-xs" />
                                         დაბლოკილია
                                       </span>
                                     ) : (
                                       <>
                                         <span className="cell-room-no">ოთახი {booking.room_number}</span>
-                                        <span className="cell-name-txt">{booking.full_name}</span>
-                                        <span className={`cell-racket-indicator ${booking.rackets_status}`}>
-                                          {booking.rackets_status === 'included' ? '🎾 Included (თავისი აქვთ)' : 'Rented (ნაქირავები)'}
-                                        </span>
+                                        <span className="cell-name-txt" style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{booking.full_name}</span>
+                                        {durationSlots > 1 && (
+                                          <span className={`cell-racket-indicator ${booking.rackets_status}`}>
+                                            {booking.rackets_status === 'included' ? '🎾 Included' : 'Rented'}
+                                          </span>
+                                        )}
                                       </>
                                     )}
                                   </div>
@@ -2299,6 +2345,36 @@ export default function App() {
           display: flex;
           flex-direction: column;
           gap: 8px;
+          padding-bottom: 24px;
+        }
+        .sidebar-department-switcher {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-bottom: 24px;
+          padding-bottom: 16px;
+          border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .sidebar-dep-btn {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          color: var(--text-muted);
+          padding: 12px 16px;
+          border-radius: 8px;
+          font-size: 0.9rem;
+          cursor: pointer;
+          transition: all var(--transition-fast);
+          text-align: left;
+          font-weight: 500;
+        }
+        .sidebar-dep-btn:hover {
+          background: rgba(255, 255, 255, 0.1);
+        }
+        .sidebar-dep-btn.active {
+          background: rgba(204, 255, 0, 0.1);
+          border-color: var(--color-volt);
+          color: var(--color-volt);
+          font-weight: 600;
         }
 
         .nav-item {
@@ -2450,7 +2526,7 @@ export default function App() {
 
         .dashboard-main-row {
           display: grid;
-          grid-template-columns: 2fr 3fr;
+          grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
           gap: 24px;
         }
 
@@ -2743,13 +2819,26 @@ export default function App() {
           color: var(--color-warning);
         }
 
+        .scheduler-grid-cell.occupied.dur-30m {
+          background: rgba(20, 184, 166, 0.15) !important;
+          border-left-color: #14b8a6 !important;
+        }
+        .scheduler-grid-cell.occupied.dur-1h {
+          background: rgba(14, 165, 233, 0.15) !important;
+          border-left-color: #0ea5e9 !important;
+        }
+        .scheduler-grid-cell.occupied.dur-1h30 {
+          background: rgba(139, 92, 246, 0.15) !important;
+          border-left-color: #8b5cf6 !important;
+        }
+        .scheduler-grid-cell.occupied.dur-2h {
+          background: rgba(236, 72, 153, 0.15) !important;
+          border-left-color: #ec4899 !important;
+        }
+
         .booking-cell-content {
-          display: flex;
-          flex-direction: column;
-          height: 100%;
-          justify-content: space-between;
-          font-size: 0.75rem;
           animation: cellFadeIn 0.2s ease-out;
+          pointer-events: none; /* Let clicks pass through to the cell */
         }
         
         @keyframes cellFadeIn {
@@ -2760,14 +2849,14 @@ export default function App() {
         .cell-room-no {
           font-weight: 700;
           color: white;
-          font-size: 0.75rem;
+          font-size: 0.8rem;
+          margin-bottom: 2px;
         }
         .cell-name-txt {
           font-weight: 500;
           color: var(--text-secondary);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
+          font-size: 0.75rem;
+          line-height: 1.1;
         }
         .cell-racket-indicator {
           font-size: 0.65rem;
