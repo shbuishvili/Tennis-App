@@ -2354,6 +2354,8 @@ export default function App() {
         currentUser={currentUser}
         courts={courts}
         activeDepartment={activeDepartment}
+        bookings={bookings}
+        globalSettings={globalSettings}
       />
 
       <style>{`
@@ -3452,10 +3454,10 @@ export default function App() {
             color: white;
           }
 
-          .scheduler-courts-header-row {
+          .scheduler-courts-header-row:not(.eq-header-row) {
             grid-template-columns: 1fr !important;
           }
-          .scheduler-row-cells {
+          .scheduler-row-cells:not(.eq-row-cells) {
             grid-template-columns: 1fr !important;
           }
 
