@@ -1887,6 +1887,30 @@ export default function App() {
                           style={{ width: '100px' }}
                         />
                       </div>
+
+                      <div className="form-group flex-align margin-bottom-sm">
+                        <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>სამუშაო საათის დაწყება (მაგ: 10):</label>
+                        <input 
+                          type="number" 
+                          className="form-input" 
+                          min="0" max="23"
+                          value={globalSettings.eq_start_hour || 10}
+                          onChange={(e) => handleUpdateGlobalSetting('eq_start_hour', e.target.value)}
+                          style={{ width: '100px' }}
+                        />
+                      </div>
+
+                      <div className="form-group flex-align margin-bottom-sm">
+                        <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>სამუშაო საათის დასრულება (მაგ: 20):</label>
+                        <input 
+                          type="number" 
+                          className="form-input" 
+                          min="1" max="24"
+                          value={globalSettings.eq_end_hour || 20}
+                          onChange={(e) => handleUpdateGlobalSetting('eq_end_hour', e.target.value)}
+                          style={{ width: '100px' }}
+                        />
+                      </div>
                     </>
                   )}
 
