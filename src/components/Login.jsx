@@ -99,7 +99,7 @@ export default function Login({ onLoginSuccess, isSupabaseConnected }) {
       <div className="login-card glass-panel">
         <div className="login-logo-box">
           <TennisRacketIcon size={44} className="text-volt animate-spin-slow" />
-          <h2>კორტების ჯავშნის პორტალი</h2>
+          <h2>აქტივობების ჯავშნის პორტალი</h2>
           <p className="text-xs text-secondary">სისტემაში შესვლა</p>
         </div>
 
