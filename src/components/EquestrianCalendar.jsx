@@ -103,12 +103,25 @@ export default function EquestrianCalendar({
                   const booking = getBookingForTrackAndSlot(trackId, time);
                   
                   let isStartOfBooking = false;
+                  let durationSlots = 1;
+                  let colorClass = '';
+
                   if (booking) {
                     const bStart = new Date(booking.start_time);
+                    const bEnd = new Date(booking.end_time);
                     const [slotH, slotM] = time.split(':');
                     const slotTime = new Date(selectedDate);
                     slotTime.setHours(parseInt(slotH), parseInt(slotM), 0, 0);
+                    
                     isStartOfBooking = slotTime.getTime() === bStart.getTime();
+
+                    const durationMins = (bEnd.getTime() - bStart.getTime()) / 60000;
+                    durationSlots = durationMins / 30;
+
+                    if (durationMins <= 30) colorClass = 'dur-30m';
+                    else if (durationMins <= 60) colorClass = 'dur-1h';
+                    else if (durationMins <= 90) colorClass = 'dur-1h30';
+                    else colorClass = 'dur-2h';
                   }
 
                   return (
@@ -130,11 +143,22 @@ export default function EquestrianCalendar({
                           onSlotClick(time);
                         }
                       }}
-                      className={`scheduler-grid-cell cell-clay ${booking ? 'occupied' : 'empty'} ${booking?.is_blocked ? 'blocked' : ''}`}
+                      className={`scheduler-grid-cell cell-clay ${booking ? `occupied ${colorClass}` : 'empty'} ${booking?.is_blocked ? 'blocked' : ''}`}
                     >
                       {booking ? (
                         isStartOfBooking && (
-                          <div className="booking-cell-content">
+                          <div className="booking-cell-content" style={{
+                            position: 'absolute',
+                            top: 0, left: 0, right: 0,
+                            height: `calc(${durationSlots * 100}% + ${durationSlots - 1}px)`,
+                            zIndex: 10,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            textAlign: 'center',
+                            padding: '4px'
+                          }}>
                             {booking.is_blocked ? (
                               <span className="flex-align text-warning">
                                 🔒 დაბლოკილია
@@ -142,7 +166,7 @@ export default function EquestrianCalendar({
                             ) : (
                               <>
                                 <span className="cell-room-no">ოთახი {booking.room_number}</span>
-                                <span className="cell-name-txt">{booking.full_name}</span>
+                                <span className="cell-name-txt" style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{booking.full_name}</span>
                                 <div style={{ fontSize: '11px', marginTop: '4px', color: '#ddd' }}>
                                   {booking.horses_count > 0 && `🐴 ცხენი: ${booking.horses_count}`}
                                   {booking.ponies_count > 0 && ` 🐎 პონი: ${booking.ponies_count}`}
