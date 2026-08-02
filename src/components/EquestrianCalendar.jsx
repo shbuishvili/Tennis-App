@@ -77,7 +77,7 @@ export default function EquestrianCalendar({
 
   return (
     <div className="scheduler-wrapper glass-panel">
-      <div className="scheduler-header-row" style={{ gridTemplateColumns: `80px repeat(${numColumns}, 1fr)` }}>
+      <div className="scheduler-header-row eq-header-row" style={{ gridTemplateColumns: `80px repeat(${numColumns}, 1fr)` }}>
         <div className="scheduler-time-header">დრო</div>
         {Array.from({ length: numColumns }).map((_, i) => (
           <div key={i} className="scheduler-court-column-header eq-header court-header-lines clay">
@@ -103,7 +103,7 @@ export default function EquestrianCalendar({
             <div key={time} className="scheduler-grid-row">
               <div className="scheduler-row-time">{time}</div>
 
-              <div className="scheduler-row-cells" style={{ gridTemplateColumns: `repeat(${numColumns}, 1fr)` }}>
+              <div className="scheduler-row-cells eq-row-cells" style={{ gridTemplateColumns: `repeat(${numColumns}, 1fr)` }}>
                 {Array.from({ length: numColumns }).map((_, trackId) => {
                   
                   if (isBreak) {

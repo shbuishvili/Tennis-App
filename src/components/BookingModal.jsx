@@ -46,7 +46,9 @@ export default function BookingModal({
   existingBooking,
   currentUser,
   courts = [],
-  activeDepartment = 'tennis'
+  activeDepartment = 'tennis',
+  bookings = [],
+  globalSettings = {}
 }) {
   const [fullName, setFullName] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
@@ -64,6 +66,24 @@ export default function BookingModal({
   const [packageName, setPackageName] = useState('walk_1km');
   const [horsesCount, setHorsesCount] = useState(1);
   const [poniesCount, setPoniesCount] = useState(0);
+  const [addPony, setAddPony] = useState(false);
+
+  // Calculate remaining ponies for the selected slot
+  let remainingPonies = parseInt(globalSettings?.eq_max_ponies_per_slot || 3);
+  if (activeDepartment === 'equestrian' && startDate && startTime) {
+    const slotStart = buildISOFromInputs(startDate, startTime);
+    let usedPonies = 0;
+    bookings.forEach(b => {
+      if (b.activity_type !== 'equestrian') return;
+      if (existingBooking && b.id === existingBooking.id) return;
+      const bStart = new Date(b.start_time).getTime();
+      const bEnd = new Date(b.end_time).getTime();
+      if (slotStart.getTime() >= bStart && slotStart.getTime() < bEnd) {
+        usedPonies += (b.ponies_count || 0);
+      }
+    });
+    remainingPonies = Math.max(0, remainingPonies - usedPonies);
+  }
 
   useEffect(() => {
     if (existingBooking) {
@@ -94,6 +114,7 @@ export default function BookingModal({
       setPackageName(existingBooking.package_name || 'walk_1km');
       setHorsesCount(existingBooking.horses_count || (existingBooking.activity_type === 'equestrian' ? 1 : 0));
       setPoniesCount(existingBooking.ponies_count || 0);
+      setAddPony(existingBooking.package_name !== 'pony_walk' && (existingBooking.ponies_count || 0) > 0);
     } else {
       setFullName('');
       setRoomNumber('');
@@ -116,6 +137,7 @@ export default function BookingModal({
       setPackageName('walk_1km');
       setHorsesCount(activeDepartment === 'equestrian' ? 1 : 0);
       setPoniesCount(0);
+      setAddPony(false);
     }
     setError('');
   }, [existingBooking, selectedSlot, isOpen]);
@@ -245,28 +267,72 @@ export default function BookingModal({
               </div>
 
               {packageName !== 'pony_walk' && (
-                <div className="form-group">
-                  <label className="form-label">ცხენების რაოდენობა</label>
-                  <select 
-                    className="form-input" 
-                    value={horsesCount} 
-                    onChange={(e) => setHorsesCount(Number(e.target.value))}
-                  >
-                    {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n} ცხენი</option>)}
-                  </select>
-                </div>
+                <>
+                  <div className="form-group">
+                    <label className="form-label">ცხენების რაოდენობა</label>
+                    <select 
+                      className="form-input" 
+                      value={horsesCount} 
+                      onChange={(e) => setHorsesCount(Number(e.target.value))}
+                    >
+                      {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n} ცხენი</option>)}
+                    </select>
+                  </div>
+                  
+                  <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+                    <label className="checkbox-container" style={{ marginBottom: 0 }}>
+                      <input 
+                        type="checkbox" 
+                        checked={addPony} 
+                        onChange={(e) => {
+                          setAddPony(e.target.checked);
+                          if (e.target.checked && poniesCount === 0) setPoniesCount(1);
+                          if (!e.target.checked) setPoniesCount(0);
+                        }}
+                      />
+                      <span className="checkbox-checkmark"></span>
+                      <span className="checkbox-label-text">პონის დამატება (დარჩენილია: {remainingPonies})</span>
+                    </label>
+                    
+                    {addPony && (
+                      <div style={{ paddingLeft: '28px' }}>
+                        <select 
+                          className="form-input" 
+                          value={poniesCount} 
+                          onChange={(e) => setPoniesCount(Number(e.target.value))}
+                          disabled={remainingPonies === 0}
+                        >
+                          {remainingPonies === 0 ? (
+                             <option value={0}>0 პონი (ამოწურულია)</option>
+                          ) : (
+                            Array.from({length: remainingPonies}).map((_, i) => (
+                              <option key={i+1} value={i+1}>{i+1} პონი</option>
+                            ))
+                          )}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
 
               {packageName === 'pony_walk' && (
                 <div className="form-group">
-                  <label className="form-label">პონების რაოდენობა</label>
+                  <label className="form-label">პონების რაოდენობა (დარჩენილია: {remainingPonies})</label>
                   <select 
                     className="form-input" 
                     value={poniesCount} 
                     onChange={(e) => setPoniesCount(Number(e.target.value))}
                   >
-                    {[1,2,3].map(n => <option key={n} value={n}>{n} პონი</option>)}
+                    {remainingPonies === 0 ? (
+                       <option value={0}>0 პონი (ამოწურულია)</option>
+                    ) : (
+                      Array.from({length: Math.max(1, remainingPonies)}).map((_, i) => (
+                        <option key={i+1} value={i+1}>{i+1} პონი</option>
+                      ))
+                    )}
                   </select>
+                  {remainingPonies === 0 && <p className="text-xs text-danger margin-top-sm">ამ დროზე პონები აღარ არის თავისუფალი!</p>}
                 </div>
               )}
             </>
@@ -464,6 +530,8 @@ export default function BookingModal({
         .modal-content {
           width: 100%;
           max-width: 480px;
+          max-height: 95vh;
+          overflow-y: auto;
           border-radius: var(--radius-lg);
           padding: 24px;
           animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
@@ -732,9 +800,15 @@ export default function BookingModal({
 
         /* Mobile */
         @media (max-width: 900px) {
+          .modal-overlay {
+            padding: 0;
+          }
           .modal-content {
-            max-width: 100%;
-            max-height: 90vh;
+            max-width: 100vw;
+            width: 100vw;
+            height: 100vh;
+            max-height: 100vh;
+            border-radius: 0;
             overflow-y: auto;
           }
           .datetime-row {
