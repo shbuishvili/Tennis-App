@@ -2000,7 +2000,7 @@ export default function App() {
 
                         <div className="closure-form-group closure-datepicker-group">
                           <label className="form-label">პერიოდი (დაწყება → დასრულება)</label>
-                          <DatePickerRange 
+                          <DateRangePicker 
                             startDate={closureDateStart} 
                             endDate={closureDateEnd}
                             onStartChange={setClosureDateStart}
@@ -2118,7 +2118,7 @@ export default function App() {
                       <div className="closure-form-top">
                         <div className="closure-form-group closure-datepicker-group">
                           <label className="form-label text-xs">თარიღების შუალედი (აირჩიეთ კალენდრიდან)</label>
-                          <DatePickerRange 
+                          <DateRangePicker 
                             startDate={eqClosureDateStart} 
                             endDate={eqClosureDateEnd}
                             onStartChange={setEqClosureDateStart}
