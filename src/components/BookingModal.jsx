@@ -71,18 +71,21 @@ export default function BookingModal({
   // Calculate remaining ponies for the selected slot
   let remainingPonies = parseInt(globalSettings?.eq_max_ponies_per_slot || 3);
   if (activeDepartment === 'equestrian' && startDate && startTime) {
-    const slotStart = buildISOFromInputs(startDate, startTime);
-    let usedPonies = 0;
-    bookings.forEach(b => {
-      if (b.activity_type !== 'equestrian') return;
-      if (existingBooking && b.id === existingBooking.id) return;
-      const bStart = new Date(b.start_time).getTime();
-      const bEnd = new Date(b.end_time).getTime();
-      if (slotStart.getTime() >= bStart && slotStart.getTime() < bEnd) {
-        usedPonies += (b.ponies_count || 0);
-      }
-    });
-    remainingPonies = Math.max(0, remainingPonies - usedPonies);
+    const slotStartIso = buildISOFromInputs(startDate, startTime);
+    if (slotStartIso) {
+      const slotStart = new Date(slotStartIso);
+      let usedPonies = 0;
+      bookings.forEach(b => {
+        if (b.activity_type !== 'equestrian') return;
+        if (existingBooking && b.id === existingBooking.id) return;
+        const bStart = new Date(b.start_time).getTime();
+        const bEnd = new Date(b.end_time).getTime();
+        if (slotStart.getTime() >= bStart && slotStart.getTime() < bEnd) {
+          usedPonies += (b.ponies_count || 0);
+        }
+      });
+      remainingPonies = Math.max(0, remainingPonies - usedPonies);
+    }
   }
 
   useEffect(() => {
