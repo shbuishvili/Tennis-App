@@ -154,7 +154,7 @@ export default function BookingModal({
     const endISO = new Date(startMs + actualDuration * 3600000).toISOString();
 
     const bookingData = {
-      court_id: selectedCourtId,
+      court_id: activeDepartment === 'equestrian' ? null : selectedCourtId,
       full_name: isBlocked ? 'ადმინისტრაციული ბლოკი' : fullName.trim(),
       room_number: isBlocked ? 'BLOCKED' : roomNumber.trim(),
       start_time: startISO,
