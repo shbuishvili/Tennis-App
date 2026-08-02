@@ -15,6 +15,7 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState('staff');
+  const [department, setDepartment] = useState('all');
   const [createError, setCreateError] = useState('');
   const [createSuccess, setCreateSuccess] = useState('');
 
@@ -42,9 +43,9 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
         } else {
           // Add default demo accounts
           const defaultList = [
-            { id: 1, username: 'admin', password: 'admin123', role: 'super_admin', full_name: 'სუპერ ადმინისტრატორი' },
-            { id: 2, username: 'manager', password: 'manager123', role: 'manager', full_name: 'მთავარი მენეჯერი' },
-            { id: 3, username: 'staff', password: 'staff123', role: 'staff', full_name: 'მორიგე ოპერატორი' }
+            { id: 1, username: 'admin', password: 'admin123', role: 'super_admin', full_name: 'სუპერ ადმინისტრატორი', department: 'all' },
+            { id: 2, username: 'manager', password: 'manager123', role: 'manager', full_name: 'მთავარი მენეჯერი', department: 'all' },
+            { id: 3, username: 'staff', password: 'staff123', role: 'staff', full_name: 'მორიგე ოპერატორი', department: 'tennis' }
           ];
           setUsers(defaultList);
           localStorage.setItem('local_user_accounts', JSON.stringify(defaultList));
@@ -76,6 +77,7 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
         username: username.trim().toLowerCase(),
         password: password.trim(),
         role: role,
+        department: department,
         full_name: fullName.trim()
       };
 
@@ -97,6 +99,7 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
       setPassword('');
       setFullName('');
       setRole('staff');
+      setDepartment('all');
       fetchUsers();
     } catch (err) {
       setCreateError('მომხმარებლის შექმნისას მოხდა შეცდომა (შესაძლოა სახელი უკვე დაკავებულია)');
@@ -238,6 +241,19 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
               </select>
             </div>
 
+            <div className="form-group">
+              <label className="form-label">დეპარტამენტი (წვდომა)</label>
+              <select
+                className="form-input select-role-input"
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+              >
+                <option value="all">ყველა (ორივე)</option>
+                <option value="tennis">🎾 მხოლოდ ტენისი</option>
+                <option value="equestrian">🐴 მხოლოდ საჯინიბო</option>
+              </select>
+            </div>
+
             <button type="submit" className="btn btn-primary width-100">
               ანგარიშის შექმნა
             </button>
@@ -266,6 +282,7 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
                     <th>სახელი და გვარი</th>
                     <th>იუზერნეიმი</th>
                     <th>როლი</th>
+                    <th>დეპარტამენტი</th>
                     <th>მოქმედება</th>
                   </tr>
                 </thead>
@@ -277,6 +294,12 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
                       <td>
                         <span className={`role-tag role-${user.role}`}>
                           {getRoleLabel(user.role)}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="role-tag" style={{ background: 'rgba(255,255,255,0.1)' }}>
+                          {user.department === 'tennis' ? '🎾 ტენისი' : 
+                           user.department === 'equestrian' ? '🐴 საჯინიბო' : '🌐 ყველა'}
                         </span>
                       </td>
                       <td>

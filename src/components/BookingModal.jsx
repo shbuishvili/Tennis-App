@@ -45,7 +45,8 @@ export default function BookingModal({
   selectedSlot, 
   existingBooking,
   currentUser,
-  courts = []
+  courts = [],
+  activeDepartment = 'tennis'
 }) {
   const [fullName, setFullName] = useState('');
   const [roomNumber, setRoomNumber] = useState('');
@@ -58,6 +59,11 @@ export default function BookingModal({
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const [selectedCourtId, setSelectedCourtId] = useState(1);
+
+  // Equestrian states
+  const [packageName, setPackageName] = useState('walk_1km');
+  const [horsesCount, setHorsesCount] = useState(1);
+  const [poniesCount, setPoniesCount] = useState(0);
 
   useEffect(() => {
     if (existingBooking) {
@@ -84,6 +90,10 @@ export default function BookingModal({
       
       setIsBlocked(existingBooking.is_blocked || false);
       setNotes(existingBooking.notes || '');
+
+      setPackageName(existingBooking.package_name || 'walk_1km');
+      setHorsesCount(existingBooking.horses_count || (existingBooking.activity_type === 'equestrian' ? 1 : 0));
+      setPoniesCount(existingBooking.ponies_count || 0);
     } else {
       setFullName('');
       setRoomNumber('');
@@ -103,6 +113,9 @@ export default function BookingModal({
       setRacketsCount(2);
       setIsBlocked(false);
       setNotes('');
+      setPackageName('walk_1km');
+      setHorsesCount(activeDepartment === 'equestrian' ? 1 : 0);
+      setPoniesCount(0);
     }
     setError('');
   }, [existingBooking, selectedSlot, isOpen]);
@@ -130,7 +143,15 @@ export default function BookingModal({
     }
 
     const startMs = new Date(startISO).getTime();
-    const endISO = new Date(startMs + duration * 3600000).toISOString();
+    
+    let actualDuration = duration;
+    if (activeDepartment === 'equestrian') {
+      if (packageName === 'walk_1km' || packageName === 'pony_walk') actualDuration = 0.5;
+      else if (packageName === 'walk_2km' || packageName === 'tour_4km') actualDuration = 1.0;
+      else if (packageName === 'tour_7km') actualDuration = 2.0;
+    }
+    
+    const endISO = new Date(startMs + actualDuration * 3600000).toISOString();
 
     const bookingData = {
       court_id: selectedCourtId,
@@ -140,6 +161,10 @@ export default function BookingModal({
       end_time: endISO,
       rackets_status: isBlocked ? 'included' : racketsStatus,
       rackets_count: isBlocked ? 0 : racketsCount,
+      activity_type: activeDepartment,
+      package_name: activeDepartment === 'equestrian' ? packageName : null,
+      horses_count: activeDepartment === 'equestrian' ? horsesCount : 0,
+      ponies_count: activeDepartment === 'equestrian' ? poniesCount : 0,
       is_blocked: isBlocked,
       notes: notes
     };
@@ -157,9 +182,16 @@ export default function BookingModal({
         <div className="modal-header">
           <h3>
             {existingBooking ? 'ჯავშნის რედაქტირება' : 'ახალი დაჯავშნა'}
-            <span className="modal-court-badge">
-              {courts.find(c => c.id === selectedCourtId)?.name || `კორტი ${selectedCourtId}`}
-            </span>
+            {activeDepartment === 'tennis' && (
+              <span className="modal-court-badge">
+                {courts.find(c => c.id === selectedCourtId)?.name || `კორტი ${selectedCourtId}`}
+              </span>
+            )}
+            {activeDepartment === 'equestrian' && (
+              <span className="modal-court-badge" style={{ backgroundColor: '#8b5a2b' }}>
+                საჯინიბო
+              </span>
+            )}
           </h3>
           <button className="modal-close-btn" onClick={onClose}>
             <X size={20} />
@@ -169,22 +201,134 @@ export default function BookingModal({
         <form onSubmit={handleSubmit} className="modal-form">
           {error && <div className="form-error">{error}</div>}
 
-          {/* Court Selection */}
-          <div className="form-group">
-            <label className="form-label">კორტი</label>
-            <select 
-              className="form-input" 
-              value={selectedCourtId} 
-              onChange={(e) => setSelectedCourtId(Number(e.target.value))}
-            >
-              {courts.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
+          {/* Court Selection (Only for Tennis) */}
+          {activeDepartment === 'tennis' && (
+            <div className="form-group">
+              <label className="form-label">კორტი</label>
+              <select 
+                className="form-input" 
+                value={selectedCourtId} 
+                onChange={(e) => setSelectedCourtId(Number(e.target.value))}
+              >
+                {courts.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
-          {/* Block Court Toggle (Only for managers and super admins) */}
-          {currentUser?.role !== 'staff' && (
+          {/* --- EQUESTRIAN SPECIFIC FIELDS --- */}
+          {activeDepartment === 'equestrian' && !isBlocked && (
+            <>
+              <div className="form-group">
+                <label className="form-label">პაკეტი / მომსახურება</label>
+                <select 
+                  className="form-input" 
+                  value={packageName} 
+                  onChange={(e) => {
+                    setPackageName(e.target.value);
+                    if (e.target.value === 'pony_walk') {
+                      setHorsesCount(0);
+                      setPoniesCount(1);
+                    } else {
+                      setHorsesCount(1);
+                      setPoniesCount(0);
+                    }
+                  }}
+                >
+                  <option value="walk_1km">გასეირნება 1კმ (30 წთ)</option>
+                  <option value="walk_2km">გასეირნება 2კმ (1 სთ)</option>
+                  <option value="tour_4km">ტური 4.4კმ (1 სთ)</option>
+                  <option value="tour_7km">ტური 7კმ (2 სთ)</option>
+                  <option value="pony_walk">პონით გასეირნება საბავშვო (30 წთ)</option>
+                </select>
+              </div>
+
+              {packageName !== 'pony_walk' && (
+                <div className="form-group">
+                  <label className="form-label">ცხენების რაოდენობა</label>
+                  <select 
+                    className="form-input" 
+                    value={horsesCount} 
+                    onChange={(e) => setHorsesCount(Number(e.target.value))}
+                  >
+                    {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n} ცხენი</option>)}
+                  </select>
+                </div>
+              )}
+
+              {packageName === 'pony_walk' && (
+                <div className="form-group">
+                  <label className="form-label">პონების რაოდენობა</label>
+                  <select 
+                    className="form-input" 
+                    value={poniesCount} 
+                    onChange={(e) => setPoniesCount(Number(e.target.value))}
+                  >
+                    {[1,2,3].map(n => <option key={n} value={n}>{n} პონი</option>)}
+                  </select>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* --- TENNIS SPECIFIC FIELDS --- */}
+          {activeDepartment === 'tennis' && !isBlocked && (
+            <>
+              <div className="form-group">
+                <label className="form-label">ხანგრძლივობა</label>
+                <div className="duration-selector">
+                  {[1, 1.5, 2].map((val) => (
+                    <button
+                      key={val}
+                      type="button"
+                      className={`duration-btn ${duration === val ? 'active' : ''}`}
+                      onClick={() => setDuration(val)}
+                    >
+                      {val} სთ
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">ჩოგნები (Rackets)</label>
+                <div className="rackets-toggle-container">
+                  <button
+                    type="button"
+                    className={`rackets-toggle-btn included ${racketsStatus === 'included' ? 'active' : ''}`}
+                    onClick={() => setRacketsStatus('included')}
+                  >
+                    🎾 Included (თავისი აქვთ)
+                  </button>
+                  <button
+                    type="button"
+                    className={`rackets-toggle-btn excluded ${racketsStatus === 'rented' ? 'active' : ''}`}
+                    onClick={() => setRacketsStatus('rented')}
+                  >
+                    Rented (ნაქირავები)
+                  </button>
+                </div>
+                {racketsStatus === 'rented' && (
+                  <div className="margin-top-sm animate-fade-in flex-align">
+                    <span className="text-sm text-secondary margin-right-sm">რაოდენობა:</span>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max="10" 
+                      value={racketsCount} 
+                      onChange={(e) => setRacketsCount(parseInt(e.target.value) || 0)} 
+                      className="form-input" 
+                      style={{ width: '80px', padding: '6px 12px' }}
+                    />
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Block Court Toggle (Only for managers and super admins, and only Tennis) */}
+          {currentUser?.role !== 'staff' && activeDepartment === 'tennis' && (
             <div className="form-group block-toggle-group">
               <label className="checkbox-container">
                 <input 
@@ -233,58 +377,6 @@ export default function BookingModal({
                     required={!isBlocked}
                   />
                 </div>
-              </div>
-
-              {/* Duration selection */}
-              <div className="form-group">
-                <label className="form-label">ხანგრძლივობა</label>
-                <div className="duration-selector">
-                  {[1, 1.5, 2].map((val) => (
-                    <button
-                      key={val}
-                      type="button"
-                      className={`duration-btn ${duration === val ? 'active' : ''}`}
-                      onClick={() => setDuration(val)}
-                    >
-                      {val} სთ
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Rackets Status Toggle */}
-              <div className="form-group">
-                <label className="form-label">ჩოგნები (Rackets)</label>
-                <div className="rackets-toggle-container">
-                  <button
-                    type="button"
-                    className={`rackets-toggle-btn included ${racketsStatus === 'included' ? 'active' : ''}`}
-                    onClick={() => setRacketsStatus('included')}
-                  >
-                    🎾 Included (თავისი აქვთ)
-                  </button>
-                  <button
-                    type="button"
-                    className={`rackets-toggle-btn excluded ${racketsStatus === 'rented' ? 'active' : ''}`}
-                    onClick={() => setRacketsStatus('rented')}
-                  >
-                    Rented (ნაქირავები)
-                  </button>
-                </div>
-                {racketsStatus === 'rented' && (
-                  <div className="margin-top-sm animate-fade-in flex-align">
-                    <span className="text-sm text-secondary margin-right-sm">რაოდენობა:</span>
-                    <input 
-                      type="number" 
-                      min="1" 
-                      max="10" 
-                      value={racketsCount} 
-                      onChange={(e) => setRacketsCount(parseInt(e.target.value) || 0)} 
-                      className="form-input" 
-                      style={{ width: '80px', padding: '6px 12px' }}
-                    />
-                  </div>
-                )}
               </div>
             </>
           )}
