@@ -23,8 +23,11 @@ import {
   Hammer,
   Trash2,
   Lock,
-  Key
+  Key,
+  BarChart2
 } from 'lucide-react';
+
+import Analytics from './components/Analytics';
 
 const DEFAULT_COURTS = [
   { id: 1, name: 'კორტი 1 (Clay)', type: 'Clay', is_active: true, status: 'active' },
@@ -63,12 +66,17 @@ const TennisRacketIcon = ({ size = 24, className = "" }) => (
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'calendar', 'customers', 'staff', 'settings', 'profile'
+  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'calendar', 'customers', 'staff', 'settings', 'profile', 'analytics'
   const [courts, setCourts] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [settings, setSettings] = useState([]);
-  const [globalSettings, setGlobalSettings] = useState({ total_rackets: '20' });
+  const [globalSettings, setGlobalSettings] = useState({ 
+    total_rackets: '20',
+    allow_manager_analytics: 'true',
+    allow_staff_analytics: 'false'
+  });
   const [courtClosures, setCourtClosures] = useState([]);
+  const [activityLogs, setActivityLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
 
@@ -114,7 +122,13 @@ export default function App() {
     } else {
       setActiveTab('login');
     }
+  }, []); // Run only once
 
+  const canSeeAnalytics = currentUser?.role === 'super_admin' || 
+    (currentUser?.role === 'manager' && globalSettings.allow_manager_analytics === 'true') ||
+    (currentUser?.role === 'staff' && globalSettings.allow_staff_analytics === 'true');
+
+  useEffect(() => {
     async function initApp() {
       setLoading(true);
       try {
@@ -136,12 +150,23 @@ export default function App() {
 
         const { data: dbGlobal } = await supabase.from('global_settings').select('*');
         if (dbGlobal) {
-          const gSettings = { total_rackets: '20' };
+          const gSettings = { 
+            total_rackets: '20',
+            allow_manager_analytics: 'true',
+            allow_staff_analytics: 'false'
+          };
           dbGlobal.forEach(s => {
             gSettings[s.key] = s.value;
           });
           setGlobalSettings(gSettings);
         }
+
+        const { data: dbLogs } = await supabase
+          .from('activity_logs')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(100);
+        setActivityLogs(dbLogs || []);
       } catch (err) {
         console.warn('Supabase loading error, falling back to LocalStorage:', err.message);
         setIsSupabaseConnected(false);
@@ -173,9 +198,20 @@ export default function App() {
         const localGlobal = localStorage.getItem('global_settings');
         if (localGlobal) setGlobalSettings(JSON.parse(localGlobal));
         else {
-          const defGlobal = { total_rackets: '20' };
+          const defGlobal = { 
+            total_rackets: '20',
+            allow_manager_analytics: 'true',
+            allow_staff_analytics: 'false'
+          };
           setGlobalSettings(defGlobal);
           localStorage.setItem('global_settings', JSON.stringify(defGlobal));
+        }
+
+        const localLogs = localStorage.getItem('activity_logs');
+        if (localLogs) setActivityLogs(JSON.parse(localLogs));
+        else {
+          setActivityLogs([]);
+          localStorage.setItem('activity_logs', JSON.stringify([]));
         }
 
         if (localClosures) setCourtClosures(JSON.parse(localClosures));
@@ -271,6 +307,38 @@ export default function App() {
     setCurrentUser(null);
     localStorage.removeItem('tennis_app_user');
     setActiveTab('login');
+  };
+
+  const logActivity = async (actionType, details) => {
+    if (!currentUser) return;
+    
+    const newLog = {
+      user_id: currentUser.id,
+      username: currentUser.username,
+      action_type: actionType,
+      details: details,
+      // Supabase uses default now() for created_at, but we set for local fallback
+      created_at: new Date().toISOString() 
+    };
+
+    if (isSupabaseConnected) {
+      try {
+        const { data, error } = await supabase.from('activity_logs').insert({
+          user_id: currentUser.id,
+          username: currentUser.username,
+          action_type: actionType,
+          details: details
+        }).select();
+        if (error) console.error("Error logging activity:", error);
+        else if (data) setActivityLogs(prev => [data[0], ...prev].slice(0, 100));
+      } catch (err) {
+        console.error(err);
+      }
+    } else {
+      const updatedLogs = [newLog, ...activityLogs].slice(0, 100);
+      setActivityLogs(updatedLogs);
+      localStorage.setItem('activity_logs', JSON.stringify(updatedLogs));
+    }
   };
 
   // Helper: check if a court is closed for a specific date
@@ -372,6 +440,11 @@ export default function App() {
         // Refresh bookings
         const { data: dbBookings } = await supabase.from('bookings').select('*');
         setBookings(dbBookings || []);
+        
+        await logActivity(
+          bookingData.id ? 'UPDATE_BOOKING' : 'CREATE_BOOKING',
+          `${bookingData.full_name} (${new Date(bookingData.start_time).toLocaleString('ka-GE')} - ${new Date(bookingData.end_time).toLocaleString('ka-GE')}) კორტი: ${court?.name}`
+        );
       } else {
         // LocalStorage fallback
         let updatedBookings = [...bookings];
@@ -386,6 +459,11 @@ export default function App() {
         }
         setBookings(updatedBookings);
         localStorage.setItem('bookings', JSON.stringify(updatedBookings));
+
+        await logActivity(
+          bookingData.id ? 'UPDATE_BOOKING' : 'CREATE_BOOKING',
+          `${bookingData.full_name} (${new Date(bookingData.start_time).toLocaleString('ka-GE')}) (ლოკალური ონლაინის გარეშე)`
+        );
       }
       setIsModalOpen(false);
     } catch (err) {
@@ -399,6 +477,7 @@ export default function App() {
     if (!window.confirm('ნამდვილად გსურთ ამ ჯავშნის წაშლა?')) return;
     setLoading(true);
     try {
+      const deletedBooking = bookings.find(b => b.id === bookingId);
       if (isSupabaseConnected) {
         const { error } = await supabase
           .from('bookings')
@@ -409,10 +488,16 @@ export default function App() {
         // Refresh bookings
         const { data: dbBookings } = await supabase.from('bookings').select('*');
         setBookings(dbBookings || []);
+        if (deletedBooking) {
+          await logActivity('DELETE_BOOKING', `${deletedBooking.full_name} (${new Date(deletedBooking.start_time).toLocaleString('ka-GE')})`);
+        }
       } else {
         const updatedBookings = bookings.filter(b => b.id !== bookingId);
         setBookings(updatedBookings);
         localStorage.setItem('bookings', JSON.stringify(updatedBookings));
+        if (deletedBooking) {
+          await logActivity('DELETE_BOOKING', `${deletedBooking.full_name} (ლოკალური)`);
+        }
       }
       setIsModalOpen(false);
     } catch (err) {
@@ -435,8 +520,10 @@ export default function App() {
       } catch (err) {
         console.error(err);
       }
+      await logActivity('UPDATE_GLOBAL_SETTING', `Key: ${key} -> ${value}`);
     } else {
       localStorage.setItem('global_settings', JSON.stringify(newSettings));
+      await logActivity('UPDATE_GLOBAL_SETTING', `Key: ${key} -> ${value} (ლოკალური)`);
     }
   };
 
@@ -453,8 +540,10 @@ export default function App() {
           .from('court_settings')
           .upsert(updatedSettingsRow);
         if (error) throw error;
+        await logActivity('UPDATE_COURT_SETTING', `განრიგი შეიცვალა (${updatedSettingsRow.day_type})`);
       } else {
         localStorage.setItem('court_settings', JSON.stringify(updatedList));
+        await logActivity('UPDATE_COURT_SETTING', `განრიგი შეიცვალა (${updatedSettingsRow.day_type}) (ლოკალური)`);
       }
     } catch (err) {
       alert('განრიგის განახლებისას მოხდა შეცდომა: ' + err.message);
@@ -985,6 +1074,16 @@ export default function App() {
             </button>
           )}
 
+          {canSeeAnalytics && (
+            <button 
+              className={`nav-item ${activeTab === 'analytics' ? 'active' : ''}`}
+              onClick={() => setActiveTab('analytics')}
+            >
+              <BarChart2 size={18} />
+              <span>ანალიტიკა & ლოგები</span>
+            </button>
+          )}
+
           {/* Account Password Change tab for all users */}
           <button 
             className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`}
@@ -1448,13 +1547,13 @@ export default function App() {
           {activeTab === 'settings' && currentUser.role !== 'staff' && (
             <div className="settings-view animate-fade-in">
               <div className="settings-layout">
-                {/* Rackets Inventory Setting */}
+                {/* Global Settings */}
                 <div className="settings-card glass-panel" style={{ marginBottom: '24px' }}>
-                  <h3>ჩოგნების ინვენტარი</h3>
-                  <p className="text-xs text-secondary margin-bottom-md">კლუბში არსებული ჩოგნების საერთო რაოდენობა (მაქსიმალური ლიმიტი)</p>
+                  <h3>სისტემური პარამეტრები</h3>
+                  <p className="text-xs text-secondary margin-bottom-md">გლობალური პარამეტრების მართვა</p>
                   
-                  <div className="form-group flex-align" style={{ maxWidth: '300px' }}>
-                    <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>სულ ჩოგანი:</label>
+                  <div className="form-group flex-align margin-bottom-sm">
+                    <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>ჩოგნების მაქსიმალური რაოდენობა კლუბში:</label>
                     <input 
                       type="number" 
                       className="form-input" 
@@ -1463,6 +1562,28 @@ export default function App() {
                       onChange={(e) => handleUpdateGlobalSetting('total_rackets', e.target.value)}
                       style={{ width: '100px' }}
                     />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="checkbox-container margin-bottom-sm">
+                      <input 
+                        type="checkbox" 
+                        checked={globalSettings.allow_manager_analytics === 'true'} 
+                        onChange={(e) => handleUpdateGlobalSetting('allow_manager_analytics', e.target.checked ? 'true' : 'false')} 
+                      />
+                      <span className="checkbox-checkmark"></span>
+                      <span className="checkbox-label-text">მენეჯერებს შეეძლოთ ანალიტიკის ნახვა</span>
+                    </label>
+                    
+                    <label className="checkbox-container">
+                      <input 
+                        type="checkbox" 
+                        checked={globalSettings.allow_staff_analytics === 'true'} 
+                        onChange={(e) => handleUpdateGlobalSetting('allow_staff_analytics', e.target.checked ? 'true' : 'false')} 
+                      />
+                      <span className="checkbox-checkmark"></span>
+                      <span className="checkbox-label-text">ოპერატორებს (staff) შეეძლოთ ანალიტიკის ნახვა</span>
+                    </label>
                   </div>
                 </div>
 
@@ -1752,8 +1873,17 @@ export default function App() {
             </div>
           )}
 
+          {/* 7. ANALYTICS VIEW */}
+          {activeTab === 'analytics' && canSeeAnalytics && (
+            <Analytics 
+              bookings={bookings}
+              courts={courts}
+              activityLogs={activityLogs}
+            />
+          )}
+          
         </div>
-      </main>
+        </main>
 
       {/* Interactive Booking Modal */}
       <BookingModal
