@@ -922,10 +922,13 @@ export default function App() {
   const getDashboardStats = () => {
     const todayStr = selectedDate.toDateString();
     
-    // Filter bookings for the selected date
+    // Filter bookings for the selected date and active department
     const todayBookings = bookings.filter(b => {
       const start = new Date(b.start_time);
-      return start.toDateString() === todayStr;
+      const bType = b.activity_type || 'tennis';
+      const isCorrectDepartment = (activeDepartment === 'equestrian' && bType === 'equestrian') ||
+                                  (activeDepartment === 'tennis' && bType !== 'equestrian');
+      return start.toDateString() === todayStr && isCorrectDepartment;
     });
 
     const activeBookingsCount = todayBookings.filter(b => !b.is_blocked).length;
@@ -983,6 +986,7 @@ export default function App() {
 
   // Helper: check if a court and time slot is booked
   const getBookingForSlot = (courtId, timeSlot, date) => {
+    if (courtId === null) return null;
     const [slotH, slotM] = timeSlot.split(':');
     const slotTime = new Date(date);
     slotTime.setHours(parseInt(slotH), parseInt(slotM), 0, 0);
@@ -995,15 +999,18 @@ export default function App() {
     });
   };
 
-  const handleSlotClick = (courtId, timeSlot, courtStatus, closure) => {
+  const handleSlotClick = (courtId, timeSlot, courtStatus, closure, passedBooking = null) => {
     // If the court is in maintenance or closed for date, prevent bookings
     if (courtStatus === 'maintenance' || closure) {
       alert(`ეს კორტი დაკეტილია: ${closure ? closure.reason : 'სარემონტო სამუშაოების გამო'}!`);
       return;
     }
 
-    const court = courts.find(c => c.id === courtId);
-    const courtName = court ? court.name : `კორტი ${courtId}`;
+    let courtName = 'საჯინიბო';
+    if (courtId !== null) {
+      const court = courts.find(c => c.id === courtId);
+      courtName = court ? court.name : `კორტი ${courtId}`;
+    }
 
     // Build "YYYY-MM-DD" from selected calendar date
     const y = selectedDate.getFullYear();
@@ -1011,7 +1018,7 @@ export default function App() {
     const d = String(selectedDate.getDate()).padStart(2, '0');
     const slotDateStr = `${y}-${mo}-${d}`;
 
-    const booking = getBookingForSlot(courtId, timeSlot, selectedDate);
+    const booking = passedBooking || getBookingForSlot(courtId, timeSlot, selectedDate);
 
     if (booking) {
       // For existing booking: decode start_time (UTC ISO) → Georgia local (UTC+4)
@@ -1255,8 +1262,8 @@ export default function App() {
                 const slotTime = `${String(ge.getUTCHours()).padStart(2,'0')}:${String(ge.getUTCMinutes()).padStart(2,'0')}`;
 
                 setSelectedSlot({ 
-                  courtId: courts[0]?.id || 1, 
-                  courtName: courts[0]?.name || 'კორტი 1',
+                  courtId: activeDepartment === 'equestrian' ? null : (courts[0]?.id || 1), 
+                  courtName: activeDepartment === 'equestrian' ? 'საჯინიბო' : (courts[0]?.name || 'კორტი 1'),
                   time: null,
                   slotDate,
                   slotTime
@@ -1282,6 +1289,24 @@ export default function App() {
         {/* Dynamic Tab Views */}
         <div className="tab-view-container">
           
+          {/* Department Switcher (Global) */}
+          {(currentUser?.department === 'all' || !currentUser?.department || currentUser?.role !== 'staff') && (
+            <div className="department-switcher flex-align" style={{ marginBottom: '16px', gap: '8px' }}>
+              <button 
+                className={`btn ${activeDepartment === 'tennis' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setActiveDepartment('tennis')}
+              >
+                🎾 ტენისი
+              </button>
+              <button 
+                className={`btn ${activeDepartment === 'equestrian' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => setActiveDepartment('equestrian')}
+              >
+                🐴 საჯინიბო
+              </button>
+            </div>
+          )}
+
           {/* 1. DASHBOARD VIEW */}
           {activeTab === 'dashboard' && currentUser.role !== 'staff' && (
             <div className="dashboard-view animate-fade-in">
@@ -1439,24 +1464,6 @@ export default function App() {
           {activeTab === 'calendar' && (
             <div className="calendar-view animate-fade-in">
               
-              {/* Department Switcher */}
-              {(currentUser?.department === 'all' || !currentUser?.department || currentUser?.role !== 'staff') && (
-                <div className="department-switcher flex-align" style={{ marginBottom: '16px', gap: '8px' }}>
-                  <button 
-                    className={`btn ${activeDepartment === 'tennis' ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => setActiveDepartment('tennis')}
-                  >
-                    🎾 ტენისი
-                  </button>
-                  <button 
-                    className={`btn ${activeDepartment === 'equestrian' ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => setActiveDepartment('equestrian')}
-                  >
-                    🐴 საჯინიბო
-                  </button>
-                </div>
-              )}
-
               {activeDepartment === 'equestrian' ? (
                 <EquestrianCalendar 
                   selectedDate={selectedDate}
@@ -1684,6 +1691,42 @@ export default function App() {
                       min="0"
                       value={globalSettings.total_rackets || 20}
                       onChange={(e) => handleUpdateGlobalSetting('total_rackets', e.target.value)}
+                      style={{ width: '100px' }}
+                    />
+                  </div>
+                  
+                  <div className="form-group flex-align margin-bottom-sm">
+                    <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>საჯინიბო - ერთ სლოტზე მაქსიმალური ჯავშნები:</label>
+                    <input 
+                      type="number" 
+                      className="form-input" 
+                      min="1"
+                      value={globalSettings.eq_max_bookings_per_slot || 2}
+                      onChange={(e) => handleUpdateGlobalSetting('eq_max_bookings_per_slot', e.target.value)}
+                      style={{ width: '100px' }}
+                    />
+                  </div>
+
+                  <div className="form-group flex-align margin-bottom-sm">
+                    <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>საჯინიბო - ჯამური ცხენების რაოდენობა სლოტზე:</label>
+                    <input 
+                      type="number" 
+                      className="form-input" 
+                      min="0"
+                      value={globalSettings.eq_max_horses_per_slot || 6}
+                      onChange={(e) => handleUpdateGlobalSetting('eq_max_horses_per_slot', e.target.value)}
+                      style={{ width: '100px' }}
+                    />
+                  </div>
+
+                  <div className="form-group flex-align margin-bottom-sm">
+                    <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>საჯინიბო - ჯამური პონების რაოდენობა სლოტზე:</label>
+                    <input 
+                      type="number" 
+                      className="form-input" 
+                      min="0"
+                      value={globalSettings.eq_max_ponies_per_slot || 3}
+                      onChange={(e) => handleUpdateGlobalSetting('eq_max_ponies_per_slot', e.target.value)}
                       style={{ width: '100px' }}
                     />
                   </div>
@@ -2003,6 +2046,7 @@ export default function App() {
               bookings={bookings}
               courts={courts}
               activityLogs={activityLogs}
+              activeDepartment={activeDepartment}
             />
           )}
           
@@ -2019,6 +2063,7 @@ export default function App() {
         existingBooking={selectedBooking}
         currentUser={currentUser}
         courts={courts}
+        activeDepartment={activeDepartment}
       />
 
       <style>{`
