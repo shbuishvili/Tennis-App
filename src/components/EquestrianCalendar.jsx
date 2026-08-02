@@ -9,8 +9,8 @@ export default function EquestrianCalendar({
   onSlotClick 
 }) {
   const timeSlots = [];
-  let startHour = 10;
-  let endHour = 20;
+  let startHour = parseInt(globalSettings?.eq_start_hour || 10);
+  let endHour = parseInt(globalSettings?.eq_end_hour || 20);
 
   for (let h = startHour; h < endHour; h++) {
     timeSlots.push(`${h.toString().padStart(2, '0')}:00`);
