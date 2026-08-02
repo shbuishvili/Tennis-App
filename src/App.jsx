@@ -934,9 +934,12 @@ export default function App() {
     const activeBookingsCount = todayBookings.filter(b => !b.is_blocked).length;
     const blockedSlotsCount = todayBookings.filter(b => b.is_blocked).length;
     
-    // Count rackets rented
+    // Count resources rented
     let racketsIncluded = 0; // own racket
     let racketsExcluded = 0; // rented
+    let horsesRented = 0;
+    let poniesRented = 0;
+
     todayBookings.forEach(b => {
       if (!b.is_blocked) {
         if (b.rackets_status === 'included') {
@@ -944,6 +947,8 @@ export default function App() {
         } else {
           racketsExcluded += (b.rackets_count || 2);
         }
+        horsesRented += (b.horses_count || 0);
+        poniesRented += (b.ponies_count || 0);
       }
     });
 
@@ -978,7 +983,9 @@ export default function App() {
       racketsPct: (racketsIncluded + racketsExcluded) > 0 
         ? Math.round((racketsExcluded / (racketsIncluded + racketsExcluded)) * 100) 
         : 0, // tracking rental demand (racketsExcluded)
-      occupancyRate
+      occupancyRate,
+      horsesRented,
+      poniesRented
     };
   };
 
@@ -1322,25 +1329,51 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="stat-card glass-panel">
-                  <div className="stat-icon-wrapper volt">
-                    <Trophy size={20} />
-                  </div>
-                  <div className="stat-info">
-                    <span className="stat-label">გაცემული ჩოგნები</span>
-                    <span className="stat-value">{stats.racketsTotal}</span>
-                  </div>
-                </div>
+                {activeDepartment === 'tennis' ? (
+                  <>
+                    <div className="stat-card glass-panel">
+                      <div className="stat-icon-wrapper volt">
+                        <Trophy size={20} />
+                      </div>
+                      <div className="stat-info">
+                        <span className="stat-label">გაცემული ჩოგნები</span>
+                        <span className="stat-value">{stats.racketsTotal}</span>
+                      </div>
+                    </div>
 
-                <div className="stat-card glass-panel">
-                  <div className="stat-icon-wrapper orange">
-                    <TrendingUp size={20} />
-                  </div>
-                  <div className="stat-info">
-                    <span className="stat-label">კორტების დატვირთვა</span>
-                    <span className="stat-value">{stats.occupancyRate}%</span>
-                  </div>
-                </div>
+                    <div className="stat-card glass-panel">
+                      <div className="stat-icon-wrapper orange">
+                        <TrendingUp size={20} />
+                      </div>
+                      <div className="stat-info">
+                        <span className="stat-label">კორტების დატვირთვა</span>
+                        <span className="stat-value">{stats.occupancyRate}%</span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="stat-card glass-panel">
+                      <div className="stat-icon-wrapper volt">
+                        <Trophy size={20} />
+                      </div>
+                      <div className="stat-info">
+                        <span className="stat-label">გაცემული ცხენები</span>
+                        <span className="stat-value">{stats.horsesRented}</span>
+                      </div>
+                    </div>
+
+                    <div className="stat-card glass-panel">
+                      <div className="stat-icon-wrapper orange">
+                        <Trophy size={20} />
+                      </div>
+                      <div className="stat-info">
+                        <span className="stat-label">გაცემული პონები</span>
+                        <span className="stat-value">{stats.poniesRented}</span>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <div className="stat-card glass-panel">
                   <div className="stat-icon-wrapper warning">
@@ -1356,57 +1389,59 @@ export default function App() {
               {/* Main Dashboard Section */}
               <div className="dashboard-main-row">
                 {/* Rackets inventory pie chart / circular progress (Slide 8 style) */}
-                <div className="dashboard-card glass-panel card-rackets-inventory">
-                  <h3>ჩოგნების ინვენტარის აღრიცხვა</h3>
-                  <p className="text-xs text-secondary margin-bottom-md">დღიური მოთხოვნის დაქირავების პროცენტული განაწილება</p>
-                  
-                  <div className="rackets-chart-box">
-                    <div className="svg-chart-container">
-                      <svg width="200" height="200" viewBox="0 0 36 36" className="circular-chart">
-                        {/* Background track representing Excluded */}
-                        <path className="circle-bg"
-                          d="M18 2.0845
-                            a 15.9155 15.9155 0 0 1 0 31.831
-                            a 15.9155 15.9155 0 0 1 0 -31.831"
-                          fill="none"
-                          stroke="#1e293b"
-                          strokeWidth="3.5"
-                        />
-                        {/* Foreground track representing Included (Volt color) */}
-                        <path className="circle"
-                          strokeDasharray={`${stats.racketsPct}, 100`}
-                          d="M18 2.0845
-                            a 15.9155 15.9155 0 0 1 0 31.831
-                            a 15.9155 15.9155 0 0 1 0 -31.831"
-                          fill="none"
-                          stroke="var(--color-volt)"
-                          strokeWidth="3.5"
-                          strokeLinecap="round"
-                        />
-                        <text x="18" y="20.35" className="chart-percentage">
-                          {stats.racketsPct}%
-                        </text>
-                      </svg>
-                    </div>
-
-                    <div className="chart-legend-box">
-                      <div className="legend-item flex-align">
-                        <span className="legend-dot volt"></span>
-                        <div className="legend-details">
-                          <span className="legend-label">Rented (ნაქირავები)</span>
-                          <span className="legend-value">{stats.racketsExcluded} ცალი ({stats.racketsTotal > 0 ? stats.racketsPct : 0}%)</span>
-                        </div>
+                {activeDepartment === 'tennis' && (
+                  <div className="dashboard-card glass-panel card-rackets-inventory">
+                    <h3>ჩოგნების ინვენტარის აღრიცხვა</h3>
+                    <p className="text-xs text-secondary margin-bottom-md">დღიური მოთხოვნის დაქირავების პროცენტული განაწილება</p>
+                    
+                    <div className="rackets-chart-box">
+                      <div className="svg-chart-container">
+                        <svg width="200" height="200" viewBox="0 0 36 36" className="circular-chart">
+                          {/* Background track representing Excluded */}
+                          <path className="circle-bg"
+                            d="M18 2.0845
+                              a 15.9155 15.9155 0 0 1 0 31.831
+                              a 15.9155 15.9155 0 0 1 0 -31.831"
+                            fill="none"
+                            stroke="#1e293b"
+                            strokeWidth="3.5"
+                          />
+                          {/* Foreground track representing Included (Volt color) */}
+                          <path className="circle"
+                            strokeDasharray={`${stats.racketsPct}, 100`}
+                            d="M18 2.0845
+                              a 15.9155 15.9155 0 0 1 0 31.831
+                              a 15.9155 15.9155 0 0 1 0 -31.831"
+                            fill="none"
+                            stroke="var(--color-volt)"
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                          />
+                          <text x="18" y="20.35" className="chart-percentage">
+                            {stats.racketsPct}%
+                          </text>
+                        </svg>
                       </div>
-                      <div className="legend-item flex-align">
-                        <span className="legend-dot dark"></span>
-                        <div className="legend-details">
-                          <span className="legend-label">Included (თავისი აქვთ)</span>
-                          <span className="legend-value">{stats.racketsIncluded} ცალი ({stats.racketsTotal > 0 ? (100 - stats.racketsPct) : 0}%)</span>
+
+                      <div className="chart-legend-box">
+                        <div className="legend-item flex-align">
+                          <span className="legend-dot volt"></span>
+                          <div className="legend-details">
+                            <span className="legend-label">Rented (ნაქირავები)</span>
+                            <span className="legend-value">{stats.racketsExcluded} ცალი ({stats.racketsTotal > 0 ? stats.racketsPct : 0}%)</span>
+                          </div>
+                        </div>
+                        <div className="legend-item flex-align">
+                          <span className="legend-dot dark"></span>
+                          <div className="legend-details">
+                            <span className="legend-label">Included (თავისი აქვთ)</span>
+                            <span className="legend-value">{stats.racketsIncluded} ცალი ({stats.racketsTotal > 0 ? (100 - stats.racketsPct) : 0}%)</span>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* Today's timeline overview */}
                 <div className="dashboard-card glass-panel card-timeline">
@@ -1683,53 +1718,59 @@ export default function App() {
                   <h3>სისტემური პარამეტრები</h3>
                   <p className="text-xs text-secondary margin-bottom-md">გლობალური პარამეტრების მართვა</p>
                   
-                  <div className="form-group flex-align margin-bottom-sm">
-                    <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>ჩოგნების მაქსიმალური რაოდენობა კლუბში:</label>
-                    <input 
-                      type="number" 
-                      className="form-input" 
-                      min="0"
-                      value={globalSettings.total_rackets || 20}
-                      onChange={(e) => handleUpdateGlobalSetting('total_rackets', e.target.value)}
-                      style={{ width: '100px' }}
-                    />
-                  </div>
+                  {activeDepartment === 'tennis' && (
+                    <div className="form-group flex-align margin-bottom-sm">
+                      <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>ჩოგნების მაქსიმალური რაოდენობა კლუბში:</label>
+                      <input 
+                        type="number" 
+                        className="form-input" 
+                        min="0"
+                        value={globalSettings.total_rackets || 20}
+                        onChange={(e) => handleUpdateGlobalSetting('total_rackets', e.target.value)}
+                        style={{ width: '100px' }}
+                      />
+                    </div>
+                  )}
                   
-                  <div className="form-group flex-align margin-bottom-sm">
-                    <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>საჯინიბო - ერთ სლოტზე მაქსიმალური ჯავშნები:</label>
-                    <input 
-                      type="number" 
-                      className="form-input" 
-                      min="1"
-                      value={globalSettings.eq_max_bookings_per_slot || 2}
-                      onChange={(e) => handleUpdateGlobalSetting('eq_max_bookings_per_slot', e.target.value)}
-                      style={{ width: '100px' }}
-                    />
-                  </div>
+                  {activeDepartment === 'equestrian' && (
+                    <>
+                      <div className="form-group flex-align margin-bottom-sm">
+                        <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>საჯინიბო - ერთ სლოტზე მაქსიმალური ჯავშნები:</label>
+                        <input 
+                          type="number" 
+                          className="form-input" 
+                          min="1"
+                          value={globalSettings.eq_max_bookings_per_slot || 2}
+                          onChange={(e) => handleUpdateGlobalSetting('eq_max_bookings_per_slot', e.target.value)}
+                          style={{ width: '100px' }}
+                        />
+                      </div>
 
-                  <div className="form-group flex-align margin-bottom-sm">
-                    <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>საჯინიბო - ჯამური ცხენების რაოდენობა სლოტზე:</label>
-                    <input 
-                      type="number" 
-                      className="form-input" 
-                      min="0"
-                      value={globalSettings.eq_max_horses_per_slot || 6}
-                      onChange={(e) => handleUpdateGlobalSetting('eq_max_horses_per_slot', e.target.value)}
-                      style={{ width: '100px' }}
-                    />
-                  </div>
+                      <div className="form-group flex-align margin-bottom-sm">
+                        <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>საჯინიბო - ჯამური ცხენების რაოდენობა სლოტზე:</label>
+                        <input 
+                          type="number" 
+                          className="form-input" 
+                          min="0"
+                          value={globalSettings.eq_max_horses_per_slot || 6}
+                          onChange={(e) => handleUpdateGlobalSetting('eq_max_horses_per_slot', e.target.value)}
+                          style={{ width: '100px' }}
+                        />
+                      </div>
 
-                  <div className="form-group flex-align margin-bottom-sm">
-                    <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>საჯინიბო - ჯამური პონების რაოდენობა სლოტზე:</label>
-                    <input 
-                      type="number" 
-                      className="form-input" 
-                      min="0"
-                      value={globalSettings.eq_max_ponies_per_slot || 3}
-                      onChange={(e) => handleUpdateGlobalSetting('eq_max_ponies_per_slot', e.target.value)}
-                      style={{ width: '100px' }}
-                    />
-                  </div>
+                      <div className="form-group flex-align margin-bottom-sm">
+                        <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>საჯინიბო - ჯამური პონების რაოდენობა სლოტზე:</label>
+                        <input 
+                          type="number" 
+                          className="form-input" 
+                          min="0"
+                          value={globalSettings.eq_max_ponies_per_slot || 3}
+                          onChange={(e) => handleUpdateGlobalSetting('eq_max_ponies_per_slot', e.target.value)}
+                          style={{ width: '100px' }}
+                        />
+                      </div>
+                    </>
+                  )}
 
                   <div className="form-group">
                     <label className="checkbox-container margin-bottom-sm">
