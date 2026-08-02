@@ -1179,25 +1179,12 @@ export default function App() {
     <div className="app-container">
       {/* Sidebar Navigation */}
       <aside className="sidebar glass-panel">
-        <div className="sidebar-logo">
-          <TennisRacketIcon size={28} className="text-volt animate-spin-slow" />
-          <h2>ADVENTURE BOOKINGS</h2>
-        </div>
-
-        {/* Profile Card in Sidebar */}
-        <div className="user-profile-widget glass-panel">
-          <UserCheck size={16} className="text-volt" />
-          <div className="user-profile-details">
-            <span className="user-name">{currentUser.full_name}</span>
-            <span className="user-role">
-              {currentUser.role === 'super_admin' && '👑 Super Admin'}
-              {currentUser.role === 'manager' && '💼 Manager'}
-              {currentUser.role === 'staff' && '🎾 Staff'}
-            </span>
+        <div className="sidebar-brand-area">
+          <div className="sidebar-logo">
+            <TennisRacketIcon size={28} className="text-volt animate-spin-slow" />
+            <h2>ADVENTURE BOOKINGS</h2>
           </div>
-        </div>
-        
-        <nav className="sidebar-nav">
+          
           {/* Global Department Switcher in Sidebar */}
           {(currentUser?.department === 'all' || !currentUser?.department || currentUser?.role !== 'staff') && (
             <div className="sidebar-department-switcher">
@@ -1215,6 +1202,22 @@ export default function App() {
               </button>
             </div>
           )}
+        </div>
+
+        {/* Profile Card in Sidebar */}
+        <div className="user-profile-widget glass-panel">
+          <UserCheck size={16} className="text-volt" />
+          <div className="user-profile-details">
+            <span className="user-name">{currentUser.full_name}</span>
+            <span className="user-role">
+              {currentUser.role === 'super_admin' && '👑 Super Admin'}
+              {currentUser.role === 'manager' && '💼 Manager'}
+              {currentUser.role === 'staff' && '🎾 Staff'}
+            </span>
+          </div>
+        </div>
+        
+        <nav className="sidebar-nav">
 
           {currentUser.role !== 'staff' && (
             <button 
@@ -3316,7 +3319,7 @@ export default function App() {
             flex-direction: row;
             align-items: center;
             justify-content: space-between;
-            padding: 12px 20px;
+            padding: 8px 12px;
             border-right: none;
             border-bottom: 1px solid var(--border-color);
             position: sticky;
@@ -3324,9 +3327,38 @@ export default function App() {
             z-index: 100;
           }
 
+          .sidebar-brand-area {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+          }
+
           .sidebar-logo {
             margin-bottom: 0;
             padding-left: 0;
+            gap: 4px;
+          }
+          
+          .sidebar-logo h2 {
+            font-size: 0.75rem;
+          }
+          
+          .sidebar-logo svg {
+            width: 16px;
+            height: 16px;
+          }
+
+          .sidebar-department-switcher {
+            flex-direction: row;
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+            gap: 4px;
+          }
+
+          .sidebar-dep-btn {
+            padding: 4px 8px;
+            font-size: 0.7rem;
           }
           
           .user-profile-widget {
@@ -3335,7 +3367,11 @@ export default function App() {
 
           .sidebar-nav {
             flex-direction: row;
+            flex-wrap: wrap;
+            justify-content: flex-end;
             gap: 4px;
+            flex: 1;
+            margin-left: 8px;
           }
           .nav-item {
             padding: 8px 12px;
