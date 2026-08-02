@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
-import { Clock, Users } from 'lucide-react';
+import { Clock, Users, ShieldAlert } from 'lucide-react';
 
 export default function EquestrianCalendar({ 
   selectedDate, 
   bookings, 
   globalSettings,
+  eqClosures = [],
   onSlotClick 
 }) {
   const timeSlots = [];
@@ -16,6 +17,9 @@ export default function EquestrianCalendar({
     timeSlots.push(`${h.toString().padStart(2, '0')}:30`);
   }
   timeSlots.push(`${endHour}:00`);
+
+  const dateStr = selectedDate instanceof Date ? selectedDate.toISOString().split('T')[0] : '';
+  const activeClosure = eqClosures.find(c => c.date === dateStr);
 
   const maxBookingsPerSlot = parseInt(globalSettings?.eq_max_bookings_per_slot || 2);
   const maxHorses = parseInt(globalSettings?.eq_max_horses_per_slot || 6);
@@ -60,6 +64,16 @@ export default function EquestrianCalendar({
       return slotTime.getTime() >= bStart && slotTime.getTime() < bEnd;
     });
   };
+
+  if (activeClosure) {
+    return (
+      <div className="scheduler-wrapper glass-panel flex-align flex-justify-center" style={{ minHeight: '400px', flexDirection: 'column' }}>
+        <ShieldAlert size={48} className="text-warning margin-bottom-md" />
+        <h3 className="text-warning">საჯინიბო დაკეტილია</h3>
+        <p className="text-secondary margin-top-sm">მიზეზი: {activeClosure.reason}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="scheduler-wrapper glass-panel">
