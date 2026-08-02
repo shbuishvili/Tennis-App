@@ -838,6 +838,67 @@ export default function App() {
     }
   };
 
+  // Add Equestrian Closure
+  const handleAddEqClosure = async (e) => {
+    e.preventDefault();
+    if (!eqClosureDateStart || !eqClosureDateEnd || !eqClosureReason.trim()) return;
+
+    const start = new Date(eqClosureDateStart);
+    const end = new Date(eqClosureDateEnd);
+    if (end < start) {
+      alert('დასრულების თარიღი უნდა იყოს დაწყების თარიღის შემდეგ!');
+      return;
+    }
+
+    const datesToClose = [];
+    const cur = new Date(start);
+    while (cur <= end) {
+      datesToClose.push(cur.toISOString().split('T')[0]);
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    setLoading(true);
+    try {
+      const currentClosures = JSON.parse(globalSettings.eq_closures || '[]');
+      const existingKeys = new Set(currentClosures.map(c => c.date));
+      
+      const newClosures = datesToClose
+        .filter(d => !existingKeys.has(d))
+        .map(d => ({
+          id: Date.now() + Math.random(),
+          date: d,
+          reason: eqClosureReason.trim()
+        }));
+        
+      if (newClosures.length > 0) {
+        const updatedClosures = [...currentClosures, ...newClosures];
+        handleUpdateGlobalSetting('eq_closures', JSON.stringify(updatedClosures));
+      }
+
+      setEqClosureDateStart('');
+      setEqClosureDateEnd('');
+      setEqClosureReason('');
+    } catch (err) {
+      alert('ჩაკეტვის დამატებისას მოხდა შეცდომა: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Delete Equestrian Closure
+  const handleDeleteEqClosure = async (closureId) => {
+    setLoading(true);
+    try {
+      const currentClosures = JSON.parse(globalSettings.eq_closures || '[]');
+      const updatedClosures = currentClosures.filter(c => c.id !== closureId);
+      handleUpdateGlobalSetting('eq_closures', JSON.stringify(updatedClosures));
+    } catch (err) {
+      alert('ჩაკეტვის გაუქმებისას მოხდა შეცდომა: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Change self password helper
   const handleChangePassword = async (e) => {
     e.preventDefault();
