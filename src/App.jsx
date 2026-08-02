@@ -67,6 +67,7 @@ export default function App() {
   const [courts, setCourts] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [settings, setSettings] = useState([]);
+  const [globalSettings, setGlobalSettings] = useState({ total_rackets: '20' });
   const [courtClosures, setCourtClosures] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
@@ -132,6 +133,15 @@ export default function App() {
 
         const { data: dbClosures } = await supabase.from('court_closures').select('*');
         setCourtClosures(dbClosures || []);
+
+        const { data: dbGlobal } = await supabase.from('global_settings').select('*');
+        if (dbGlobal) {
+          const gSettings = { total_rackets: '20' };
+          dbGlobal.forEach(s => {
+            gSettings[s.key] = s.value;
+          });
+          setGlobalSettings(gSettings);
+        }
       } catch (err) {
         console.warn('Supabase loading error, falling back to LocalStorage:', err.message);
         setIsSupabaseConnected(false);
@@ -158,6 +168,14 @@ export default function App() {
         else {
           setBookings([]);
           localStorage.setItem('bookings', JSON.stringify([]));
+        }
+
+        const localGlobal = localStorage.getItem('global_settings');
+        if (localGlobal) setGlobalSettings(JSON.parse(localGlobal));
+        else {
+          const defGlobal = { total_rackets: '20' };
+          setGlobalSettings(defGlobal);
+          localStorage.setItem('global_settings', JSON.stringify(defGlobal));
         }
 
         if (localClosures) setCourtClosures(JSON.parse(localClosures));
@@ -302,6 +320,40 @@ export default function App() {
       return;
     }
 
+    // Rackets Inventory Check
+    if (bookingData.rackets_status === 'rented') {
+      const requestedRackets = bookingData.rackets_count || 2;
+      const totalAvailableRackets = parseInt(globalSettings.total_rackets || '20', 10);
+      
+      // We need to check every 30-min interval from newStart to newEnd
+      let inventoryExceeded = false;
+      for (let time = newStart; time < newEnd; time += 30 * 60 * 1000) {
+        // Find all other bookings active at this exact 30-min slot
+        let rentedAtThisTime = 0;
+        bookings.forEach(b => {
+          if (b.is_blocked || (bookingData.id && b.id === bookingData.id)) return;
+          if (b.rackets_status === 'rented') {
+            const bStart = new Date(b.start_time).getTime();
+            const bEnd = new Date(b.end_time).getTime();
+            if (time >= bStart && time < bEnd) {
+              rentedAtThisTime += (b.rackets_count || 2);
+            }
+          }
+        });
+        
+        if (rentedAtThisTime + requestedRackets > totalAvailableRackets) {
+          inventoryExceeded = true;
+          break;
+        }
+      }
+      
+      if (inventoryExceeded) {
+        alert(`შეცდომა: ამ საათებში საკმარისი თავისუფალი ჩოგანი არ არის. სულ გვაქვს ${totalAvailableRackets} ჩოგანი.`);
+        setLoading(false);
+        return;
+      }
+    }
+
     try {
       if (isSupabaseConnected) {
         if (bookingData.id) {
@@ -367,6 +419,24 @@ export default function App() {
       alert('ჯავშნის წაშლისას მოხდა შეცდომა: ' + err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdateGlobalSetting = async (key, value) => {
+    const newSettings = { ...globalSettings, [key]: value };
+    setGlobalSettings(newSettings);
+    
+    if (isSupabaseConnected) {
+      try {
+        const { error } = await supabase
+          .from('global_settings')
+          .upsert({ key, value }, { onConflict: 'key' });
+        if (error) console.error(error);
+      } catch (err) {
+        console.error(err);
+      }
+    } else {
+      localStorage.setItem('global_settings', JSON.stringify(newSettings));
     }
   };
 
@@ -1378,6 +1448,24 @@ export default function App() {
           {activeTab === 'settings' && currentUser.role !== 'staff' && (
             <div className="settings-view animate-fade-in">
               <div className="settings-layout">
+                {/* Rackets Inventory Setting */}
+                <div className="settings-card glass-panel" style={{ marginBottom: '24px' }}>
+                  <h3>ჩოგნების ინვენტარი</h3>
+                  <p className="text-xs text-secondary margin-bottom-md">კლუბში არსებული ჩოგნების საერთო რაოდენობა (მაქსიმალური ლიმიტი)</p>
+                  
+                  <div className="form-group flex-align" style={{ maxWidth: '300px' }}>
+                    <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>სულ ჩოგანი:</label>
+                    <input 
+                      type="number" 
+                      className="form-input" 
+                      min="0"
+                      value={globalSettings.total_rackets || 20}
+                      onChange={(e) => handleUpdateGlobalSetting('total_rackets', e.target.value)}
+                      style={{ width: '100px' }}
+                    />
+                  </div>
+                </div>
+
                 {/* Operating hours table */}
                 <div className="settings-card glass-panel">
                   <h3>სამუშაო საათების კონტროლი</h3>
