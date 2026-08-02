@@ -1450,15 +1450,17 @@ export default function App() {
                   </>
                 )}
 
-                <div className="stat-card glass-panel">
-                  <div className="stat-icon-wrapper warning">
-                    <ShieldAlert size={20} />
+                {activeDepartment === 'tennis' && (
+                  <div className="stat-card glass-panel">
+                    <div className="stat-icon-wrapper warning">
+                      <ShieldAlert size={20} />
+                    </div>
+                    <div className="stat-info">
+                      <span className="stat-label">აქტიური კორტები</span>
+                      <span className="stat-value">{stats.activeCourtsCount} / {courts.length}</span>
+                    </div>
                   </div>
-                  <div className="stat-info">
-                    <span className="stat-label">აქტიური კორტები</span>
-                    <span className="stat-value">{stats.activeCourtsCount} / {courts.length}</span>
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Main Dashboard Section */}
