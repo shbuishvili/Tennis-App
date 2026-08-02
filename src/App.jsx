@@ -3317,7 +3317,7 @@ export default function App() {
             width: 100%;
             min-width: 100%;
             flex-direction: row;
-            align-items: center;
+            align-items: flex-start;
             justify-content: space-between;
             padding: 8px 12px;
             border-right: none;
@@ -3357,7 +3357,7 @@ export default function App() {
           }
 
           .sidebar-dep-btn {
-            padding: 4px 8px;
+            padding: 10px 10px;
             font-size: 0.7rem;
           }
           
