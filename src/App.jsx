@@ -1440,7 +1440,7 @@ export default function App() {
             <div className="calendar-view animate-fade-in">
               
               {/* Department Switcher */}
-              {currentUser?.department === 'all' && (
+              {(currentUser?.department === 'all' || !currentUser?.department || currentUser?.role !== 'staff') && (
                 <div className="department-switcher flex-align" style={{ marginBottom: '16px', gap: '8px' }}>
                   <button 
                     className={`btn ${activeDepartment === 'tennis' ? 'btn-primary' : 'btn-secondary'}`}
