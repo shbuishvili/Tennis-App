@@ -105,6 +105,11 @@ export default function App() {
   const [closureDateEnd, setClosureDateEnd] = useState('');
   const [closureReason, setClosureReason] = useState('');
 
+  // Equestrian closures creation states
+  const [eqClosureDateStart, setEqClosureDateStart] = useState('');
+  const [eqClosureDateEnd, setEqClosureDateEnd] = useState('');
+  const [eqClosureReason, setEqClosureReason] = useState('ღონისძიება');
+
   // Change Password state for current user
   const [myOldPassword, setMyOldPassword] = useState('');
   const [myNewPassword, setMyNewPassword] = useState('');
@@ -1524,6 +1529,7 @@ export default function App() {
                 <EquestrianCalendar 
                   selectedDate={selectedDate}
                   bookings={bookings}
+                  eqClosures={JSON.parse(globalSettings.eq_closures || '[]')}
                   globalSettings={globalSettings}
                   onSlotClick={(time, existingBooking) => handleSlotClick(null, time, 'active', null, existingBooking)}
                 />
@@ -1841,247 +1847,378 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Operating hours table */}
-                <div className="settings-card glass-panel">
-                  <h3>სამუშაო საათების კონტროლი</h3>
-                  <p className="text-xs text-secondary margin-bottom-md">კალენდრის სამუშაო საათების განსაზღვრა</p>
-                  
-                  <div className="settings-table-wrapper">
-                    <table className="settings-table">
-                      <thead>
-                        <tr>
-                          <th>კვირის დღე</th>
-                          <th>გახსნა</th>
-                          <th>დაკეტვა</th>
-                          <th>სტატუსი</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {settings.map((row) => (
-                          <tr key={row.day_type}>
-                            <td><strong>{getDayTypeLabel(row.day_type)}</strong></td>
-                            <td>
-                              <input 
-                                type="time" 
-                                className="form-input time-input-field" 
-                                value={row.open_time.substring(0, 5)}
-                                onChange={(e) => handleUpdateSettings({
-                                  ...row,
-                                  open_time: `${e.target.value}:00`
-                                })}
-                              />
-                            </td>
-                            <td>
-                              <input 
-                                type="time" 
-                                className="form-input time-input-field" 
-                                value={row.close_time.substring(0, 5)}
-                                onChange={(e) => handleUpdateSettings({
-                                  ...row,
-                                  close_time: `${e.target.value}:00`
-                                })}
-                              />
-                            </td>
-                            <td>
-                              <button 
-                                className={`btn btn-xs status-toggle-btn ${row.is_active ? 'active' : 'inactive'}`}
-                                onClick={() => handleUpdateSettings({
-                                  ...row,
-                                  is_active: !row.is_active
-                                })}
-                              >
-                                {row.is_active ? 'აქტიური' : 'შეზღუდული'}
-                              </button>
-                            </td>
+                                {/* Operating hours table */}
+                {activeDepartment !== 'equestrian' && (
+                  <div className="settings-card glass-panel">
+                    <h3>სამუშაო საათების კონტროლი</h3>
+                    <p className="text-xs text-secondary margin-bottom-md">კალენდრის სამუშაო საათების განსაზღვრა</p>
+                    
+                    <div className="settings-table-wrapper">
+                      <table className="settings-table">
+                        <thead>
+                          <tr>
+                            <th>კვირის დღე</th>
+                            <th>გახსნა</th>
+                            <th>დაკეტვა</th>
+                            <th>სტატუსი</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {settings.map((row) => (
+                            <tr key={row.day_type}>
+                              <td><strong>{getDayTypeLabel(row.day_type)}</strong></td>
+                              <td>
+                                <input 
+                                  type="time" 
+                                  className="form-input time-input-field" 
+                                  value={row.open_time.substring(0, 5)}
+                                  onChange={(e) => handleUpdateSettings({
+                                    ...row,
+                                    open_time: `${e.target.value}:00`
+                                  })}
+                                />
+                              </td>
+                              <td>
+                                <input 
+                                  type="time" 
+                                  className="form-input time-input-field" 
+                                  value={row.close_time.substring(0, 5)}
+                                  onChange={(e) => handleUpdateSettings({
+                                    ...row,
+                                    close_time: `${e.target.value}:00`
+                                  })}
+                                />
+                              </td>
+                              <td>
+                                <button 
+                                  className={`btn btn-xs status-toggle-btn ${row.is_active ? 'active' : 'inactive'}`}
+                                  onClick={() => handleUpdateSettings({
+                                    ...row,
+                                    is_active: !row.is_active
+                                  })}
+                                >
+                                  {row.is_active ? 'აქტიური' : 'შეზღუდული'}
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Court configurations (ADD, DELETE, MAINTENANCE) */}
-                <div className="settings-card glass-panel">
-                  <h3>კორტების მართვა და რემონტი</h3>
-                  <p className="text-xs text-secondary margin-bottom-md">ახალი კორტის დამატება, წაშლა ან რემონტზე დაკეტვა</p>
-                  
-                  {/* Add Court form */}
-                  <form onSubmit={handleAddCourt} className="add-court-form margin-bottom-md flex-align">
-                    <input 
-                      type="text" 
-                      className="form-input text-sm"
-                      value={newCourtName}
-                      onChange={(e) => setNewCourtName(e.target.value)}
-                      placeholder="კორტის სახელი (მაგ. კორტი 5)"
-                      required
-                    />
-                    <select
-                      className="form-input select-court-type text-sm"
-                      value={newCourtType}
-                      onChange={(e) => setNewCourtType(e.target.value)}
-                    >
-                      <option value="Clay">🧱 Clay</option>
-                      <option value="Hard">🔵 Hard</option>
-                    </select>
-                    <button type="submit" className="btn btn-primary btn-xs">
-                      დამატება
-                    </button>
-                  </form>
+                {activeDepartment !== 'equestrian' && (
+                  <div className="settings-card glass-panel">
+                    <h3>კორტების მართვა და რემონტი</h3>
+                    <p className="text-xs text-secondary margin-bottom-md">ახალი კორტის დამატება, წაშლა ან რემონტზე დაკეტვა</p>
+                    
+                    {/* Add Court form */}
+                    <form onSubmit={handleAddCourt} className="add-court-form margin-bottom-md flex-align">
+                      <input 
+                        type="text" 
+                        className="form-input text-sm"
+                        value={newCourtName}
+                        onChange={(e) => setNewCourtName(e.target.value)}
+                        placeholder="კორტის სახელი (მაგ. კორტი 5)"
+                        required
+                      />
+                      <select
+                        className="form-input select-court-type text-sm"
+                        value={newCourtType}
+                        onChange={(e) => setNewCourtType(e.target.value)}
+                      >
+                        <option value="Clay">🧱 Clay</option>
+                        <option value="Hard">🔵 Hard</option>
+                      </select>
+                      <button type="submit" className="btn btn-primary btn-xs">
+                        დამატება
+                      </button>
+                    </form>
 
-                  {/* Courts list */}
-                  <div className="courts-edit-list">
-                    {courts.map(court => (
-                      <div key={court.id} className="court-edit-item glass-panel">
-                        <span className={`court-type-dot ${court.type === 'Clay' ? 'clay' : 'hard'}`}></span>
-                        <div className="court-details-col">
-                          <strong>{court.name}</strong>
-                          <span className="text-xs text-secondary capitalize">{court.type} court</span>
-                        </div>
-                        
-                        <div className="court-edit-actions">
-                          {/* Toggle Maintenance button */}
-                          <button 
-                            className={`btn btn-xs flex-align ${court.status === 'maintenance' ? 'btn-danger' : 'btn-secondary'}`}
-                            onClick={() => handleToggleCourtMaintenance(court.id, court.status)}
-                          >
-                            <Hammer size={12} className="margin-right-xs" />
-                            {court.status === 'maintenance' ? 'რემონტზეა' : 'გახსნა'}
-                          </button>
+                    {/* Courts list */}
+                    <div className="courts-edit-list">
+                      {courts.map(court => (
+                        <div key={court.id} className="court-edit-item glass-panel">
+                          <span className={`court-type-dot ${court.type === 'Clay' ? 'clay' : 'hard'}`}></span>
+                          <div className="court-details-col">
+                            <strong>{court.name}</strong>
+                            <span className="text-xs text-secondary capitalize">{court.type} court</span>
+                          </div>
+                          
+                          <div className="court-edit-actions">
+                            {/* Toggle Maintenance button */}
+                            <button 
+                              className={`btn btn-xs flex-align ${court.status === 'maintenance' ? 'btn-danger' : 'btn-secondary'}`}
+                              onClick={() => handleToggleCourtMaintenance(court.id, court.status)}
+                            >
+                              <Hammer size={12} className="margin-right-xs" />
+                              {court.status === 'maintenance' ? 'რემონტზეა' : 'გახსნა'}
+                            </button>
 
-                          {/* Delete court */}
-                          <button 
-                            className="btn btn-danger btn-xs flex-align btn-delete-court"
-                            onClick={() => handleDeleteCourt(court.id, court.name)}
-                          >
-                            <Trash2 size={12} />
-                          </button>
+                            {/* Delete Court button */}
+                            <button 
+                              className="btn btn-xs btn-danger flex-align"
+                              onClick={() => handleDeleteCourt(court.id, court.name)}
+                              title="კორტის წაშლა"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Court Closures by Date */}
-                <div className="settings-card glass-panel margin-top-md">
-                  <h3>კორტების ჩაკეტვა თარიღებით</h3>
-                  <p className="text-xs text-secondary margin-bottom-md">ჩაკეტეთ კორტი კონკრეტულ თარიღზე ღონისძიების ან ტურნირის გამო</p>
-                  
-                  {/* Add Closure form */}
-                  <form onSubmit={handleAddClosure} className="closure-form margin-bottom-md">
-                    {/* Row 1: court + date range picker */}
-                    <div className="closure-form-top">
-                      <div className="closure-form-group">
-                        <label className="form-label">კორტი</label>
-                        <select
-                          className="form-input text-sm"
-                          value={closureCourtId}
-                          onChange={(e) => setClosureCourtId(e.target.value)}
-                          required
-                        >
-                          <option value="">აირჩიეთ კორტი</option>
-                          {courts.map(c => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
+                {activeDepartment !== 'equestrian' && (
+                  <div className="settings-card glass-panel margin-top-md">
+                    <h3>კორტების ჩაკეტვა თარიღებით</h3>
+                    <p className="text-xs text-secondary margin-bottom-md">ჩაკეტეთ კორტი კონკრეტულ თარიღზე ღონისძიების ან ტურნირის გამო</p>
+                    
+                    {/* Add Closure form */}
+                    <form onSubmit={handleAddClosure} className="closure-form margin-bottom-md">
+                      {/* Row 1: court + date range picker */}
+                      <div className="closure-form-top">
+                        <div className="closure-form-group">
+                          <label className="form-label">კორტი</label>
+                          <select
+                            className="form-input text-sm"
+                            value={closureCourtId}
+                            onChange={(e) => setClosureCourtId(e.target.value)}
+                            required
+                          >
+                            <option value="">აირჩიეთ კორტი</option>
+                            <option value="all">ყველა კორტი</option>
+                            {courts.map(c => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="closure-form-group closure-datepicker-group">
+                          <label className="form-label">პერიოდი (დაწყება → დასრულება)</label>
+                          <DatePickerRange 
+                            startDate={closureDateStart} 
+                            endDate={closureDateEnd}
+                            onStartChange={setClosureDateStart}
+                            onEndChange={setClosureDateEnd}
+                          />
+                        </div>
                       </div>
 
-                      <div className="closure-form-group closure-datepicker-group">
-                        <label className="form-label">პერიოდი (დაწყება → დასრულება)</label>
-                        <DateRangePicker
-                          startDate={closureDateStart}
-                          endDate={closureDateEnd}
-                          onStartChange={setClosureDateStart}
-                          onEndChange={setClosureDateEnd}
-                        />
+                      {/* Row 2: reason + submit */}
+                      <div className="closure-form-bottom">
+                        <div className="closure-form-group" style={{ flex: 1 }}>
+                          <label className="form-label">მიზეზი</label>
+                          <input
+                            type="text"
+                            className="form-input text-sm"
+                            value={closureReason}
+                            onChange={(e) => setClosureReason(e.target.value)}
+                            placeholder="მაგ. ტურნირი, ღონისძიება, რემონტი"
+                            required
+                          />
+                        </div>
+                        <div className="closure-submit-col">
+                          <label className="form-label">&nbsp;</label>
+                          <button type="submit" className="btn btn-primary btn-xs flex-align">
+                            <CalendarIcon size={14} className="margin-right-xs" />
+                            ჩაკეტვა
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    </form>
 
-                    {/* Row 2: reason + submit */}
-                    <div className="closure-form-bottom">
-                      <div className="closure-form-group" style={{ flex: 1 }}>
-                        <label className="form-label">მიზეზი</label>
-                        <input
-                          type="text"
-                          className="form-input text-sm"
-                          value={closureReason}
-                          onChange={(e) => setClosureReason(e.target.value)}
-                          placeholder="მაგ. ტურნირი, ღონისძიება, რემონტი"
-                          required
-                        />
-                      </div>
-                      <div className="closure-submit-col">
-                        <label className="form-label">&nbsp;</label>
-                        <button type="submit" className="btn btn-primary btn-xs">
-                          ჩაკეტვა
-                        </button>
-                      </div>
-                    </div>
-                  </form>
+                    {/* Closures list */}
+                    <div className="courts-edit-list" style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                      {courtClosures.length === 0 ? (
+                        <p className="text-xs text-muted padding-xs">აქტიური ჩაკეტვები არ არის</p>
+                      ) : (
+                        courtClosures
+                          .sort((a, b) => new Date(a.closure_date) - new Date(b.closure_date))
+                          .reduce((groups, closure) => {
+                            // Group consecutive dates for same court+reason into one row
+                            const last = groups[groups.length - 1];
+                            if (
+                              last && 
+                              last.court_id === parseInt(closure.court_id) && 
+                              last.reason === closure.reason &&
+                              (new Date(closure.closure_date) - new Date(last.endDate)) / 86400000 === 1
+                            ) {
+                              last.endDate = closure.closure_date;
+                              last.ids.push(closure.id);
+                            } else {
+                              groups.push({
+                                court_id: parseInt(closure.court_id),
+                                reason: closure.reason,
+                                startDate: closure.closure_date,
+                                endDate: closure.closure_date,
+                                ids: [closure.id]
+                              });
+                            }
+                            return groups;
+                          }, [])
+                          .map((group, index) => {
+                            const court = courts.find(c => c.id === group.court_id);
+                            
+                            // Format date display
+                            let dateDisplay = group.startDate;
+                            if (group.startDate !== group.endDate) {
+                              dateDisplay = `${group.startDate} - ${group.endDate}`;
+                            }
 
-                  {/* Closures list */}
-                  <div className="courts-edit-list" style={{ maxHeight: '220px', overflowY: 'auto' }}>
-                    {courtClosures.length === 0 ? (
-                      <p className="text-xs text-muted padding-xs">აქტიური ჩაკეტვები არ არის</p>
-                    ) : (
-                      courtClosures
-                        .sort((a, b) => new Date(a.closure_date) - new Date(b.closure_date))
-                        .reduce((groups, closure) => {
-                          // Group consecutive dates for same court+reason into one row
-                          const last = groups[groups.length - 1];
-                          if (
-                            last &&
-                            last.court_id === parseInt(closure.court_id) &&
-                            last.reason === closure.reason &&
-                            // consecutive day?
-                            (new Date(closure.closure_date) - new Date(last.endDate)) / 86400000 === 1
-                          ) {
-                            last.endDate = closure.closure_date;
-                            last.ids.push(closure.id);
-                          } else {
-                            groups.push({
-                              court_id: parseInt(closure.court_id),
-                              reason: closure.reason,
-                              startDate: closure.closure_date,
-                              endDate: closure.closure_date,
-                              ids: [closure.id]
-                            });
-                          }
-                          return groups;
-                        }, [])
-                        .map((group, i) => {
-                          const court = courts.find(c => c.id === group.court_id);
-                          const fmtDate = (d) => new Date(d).toLocaleDateString('ka-GE', { month: 'short', day: 'numeric', year: 'numeric' });
-                          const dateLabel = group.startDate === group.endDate
-                            ? fmtDate(group.startDate)
-                            : `${fmtDate(group.startDate)} — ${fmtDate(group.endDate)}`;
-                          return (
-                            <div key={i} className="court-edit-item glass-panel">
-                              <div className="court-details-col">
-                                <strong>{court ? court.name : `კორტი ${group.court_id}`}</strong>
-                                <span className="text-xs text-secondary">{dateLabel} · {group.reason}</span>
+                            return (
+                              <div key={`group-${index}`} className="court-edit-item glass-panel" style={{ padding: '12px', borderLeft: '3px solid var(--color-warning)' }}>
+                                <div className="court-details-col" style={{ flex: 1 }}>
+                                  <div className="flex-align margin-bottom-xs">
+                                    <strong style={{ fontSize: '14px' }}>
+                                      {court ? court.name : 'ყველა კორტი'}
+                                    </strong>
+                                    <span className="badge badge-warning margin-left-sm" style={{ fontSize: '10px' }}>
+                                      {dateDisplay}
+                                    </span>
+                                  </div>
+                                  <span className="text-xs text-secondary">
+                                    მიზეზი: <b>{group.reason}</b>
+                                  </span>
+                                </div>
+                                
+                                <div className="court-edit-actions">
+                                  <button 
+                                    className="btn btn-xs btn-danger flex-align"
+                                    onClick={async () => {
+                                      if (window.confirm('ნამდვილად გსურთ ამ ჩაკეტვის პერიოდის გაუქმება?')) {
+                                        await handleDeleteClosures(group.ids);
+                                      }
+                                    }}
+                                    title="გაუქმება"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
                               </div>
-                              <div className="court-edit-actions">
-                                <button 
-                                  className="btn btn-danger btn-xs flex-align btn-delete-court"
-                                  onClick={async () => {
-                                    if (!window.confirm('ნამდვილად გსურთ ამ ჩაკეტვის გაუქმება?')) return;
-                                    await handleDeleteClosures(group.ids);
-                                  }}
-                                >
-                                  <Trash2 size={12} />
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })
-                    )}
+                            );
+                          })
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* Equestrian Closures */}
+                {activeDepartment === 'equestrian' && (
+                  <div className="settings-card glass-panel margin-top-md">
+                    <h3>საჯინიბოს დაკეტვის დღეები</h3>
+                    <p className="text-xs text-secondary margin-bottom-md">სრულად საჯინიბოს ჩაკეტვა ღონისძიებაზე ან რემონტზე</p>
+                    
+                    {/* Add Eq Closure form */}
+                    <form onSubmit={handleAddEqClosure} className="closure-form margin-bottom-md">
+                      <div className="closure-form-top">
+                        <div className="closure-form-group closure-datepicker-group">
+                          <label className="form-label text-xs">თარიღების შუალედი (აირჩიეთ კალენდრიდან)</label>
+                          <DatePickerRange 
+                            startDate={eqClosureDateStart} 
+                            endDate={eqClosureDateEnd}
+                            onStartChange={setEqClosureDateStart}
+                            onEndChange={setEqClosureDateEnd}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="closure-form-bottom">
+                        <div className="closure-form-group" style={{ flex: 1 }}>
+                          <label className="form-label text-xs">მიზეზი (მაგ. ღონისძიება, რემონტი)</label>
+                          <input 
+                            type="text" 
+                            className="form-input text-sm"
+                            value={eqClosureReason}
+                            onChange={(e) => setEqClosureReason(e.target.value)}
+                            placeholder="ჩაკეტვის მიზეზი..."
+                            required
+                          />
+                        </div>
+
+                        <div className="closure-submit-col">
+                          <button type="submit" className="btn btn-primary btn-sm flex-align" style={{ width: '100%', justifyContent: 'center' }}>
+                            <CalendarIcon size={14} className="margin-right-xs" />
+                            დაკეტვა
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+
+                    {/* Eq Closures list */}
+                    <div className="courts-edit-list">
+                      {JSON.parse(globalSettings.eq_closures || '[]').length === 0 ? (
+                        <p className="text-sm text-secondary text-center" style={{ padding: '20px 0' }}>არ არის დაგეგმილი ჩაკეტვები</p>
+                      ) : (
+                        JSON.parse(globalSettings.eq_closures || '[]')
+                          .sort((a, b) => new Date(a.date) - new Date(b.date))
+                          .reduce((groups, closure) => {
+                            const last = groups[groups.length - 1];
+                            if (
+                              last && 
+                              last.reason === closure.reason &&
+                              (new Date(closure.date) - new Date(last.endDate)) / 86400000 === 1
+                            ) {
+                              last.endDate = closure.date;
+                              last.ids.push(closure.id);
+                            } else {
+                              groups.push({
+                                reason: closure.reason,
+                                startDate: closure.date,
+                                endDate: closure.date,
+                                ids: [closure.id]
+                              });
+                            }
+                            return groups;
+                          }, [])
+                          .map((group, index) => {
+                            let dateDisplay = group.startDate;
+                            if (group.startDate !== group.endDate) {
+                              dateDisplay = `${group.startDate} - ${group.endDate}`;
+                            }
+
+                            return (
+                              <div key={`eq-group-${index}`} className="court-edit-item glass-panel" style={{ padding: '12px', borderLeft: '3px solid var(--color-warning)' }}>
+                                <div className="court-details-col" style={{ flex: 1 }}>
+                                  <div className="flex-align margin-bottom-xs">
+                                    <strong style={{ fontSize: '14px' }}>საჯინიბო</strong>
+                                    <span className="badge badge-warning margin-left-sm" style={{ fontSize: '10px' }}>
+                                      {dateDisplay}
+                                    </span>
+                                  </div>
+                                  <span className="text-xs text-secondary">
+                                    მიზეზი: <b>{group.reason}</b>
+                                  </span>
+                                </div>
+                                <div className="court-edit-actions">
+                                  <button 
+                                    className="btn btn-xs btn-danger flex-align"
+                                    onClick={() => {
+                                      if (window.confirm('ნამდვილად გსურთ ამ ჩაკეტვის გაუქმება?')) {
+                                        group.ids.forEach(id => handleDeleteEqClosure(id));
+                                      }
+                                    }}
+                                    title="გაუქმება"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* 6. PROFILE VIEW (Password change) */}
+{/* 6. PROFILE VIEW (Password change) */}
           {activeTab === 'profile' && (
             <div className="profile-view animate-fade-in">
               <div className="profile-card-container glass-panel">
