@@ -171,8 +171,8 @@ export default function BookingModal({
     
     let actualDuration = duration;
     if (activeDepartment === 'equestrian') {
-      if (packageName === 'walk_1km' || packageName === 'pony_walk') actualDuration = 0.5;
-      else if (packageName === 'walk_2km' || packageName === 'tour_4km') actualDuration = 1.0;
+      if (packageName === 'walk_1km' || packageName === 'walk_2km' || packageName === 'pony_walk') actualDuration = 0.5;
+      else if (packageName === 'tour_4km') actualDuration = 1.0;
       else if (packageName === 'tour_7km') actualDuration = 2.0;
     }
     
