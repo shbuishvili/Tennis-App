@@ -68,6 +68,12 @@ export default function BookingModal({
   const [poniesCount, setPoniesCount] = useState(0);
   const [addPony, setAddPony] = useState(false);
 
+  // Quad states
+  const [quadPackageName, setQuadPackageName] = useState('quad_simple_10km');
+  const [quadsCount, setQuadsCount] = useState(1);
+  const [hasBuggy, setHasBuggy] = useState(false);
+  const [hasExtraGuest, setHasExtraGuest] = useState(false);
+
   // Calculate remaining ponies for the selected slot
   let remainingPonies = parseInt(globalSettings?.eq_max_ponies_per_slot || 3);
   if (activeDepartment === 'equestrian' && startDate && startTime) {
@@ -85,6 +91,34 @@ export default function BookingModal({
         }
       });
       remainingPonies = Math.max(0, remainingPonies - usedPonies);
+    }
+  }
+
+  // Calculate remaining quads & buggies for the selected slot
+  let remainingQuads = parseInt(globalSettings?.quad_max_quads_per_slot || 9, 10);
+  let remainingBuggies = parseInt(globalSettings?.quad_max_buggies_per_slot || 1, 10);
+  let quadBookingsInSlot = 0;
+  const maxQuadBookings = parseInt(globalSettings?.quad_max_bookings_per_slot || 6, 10);
+
+  if (activeDepartment === 'quad' && startDate && startTime) {
+    const slotStartIso = buildISOFromInputs(startDate, startTime);
+    if (slotStartIso) {
+      const slotStart = new Date(slotStartIso);
+      let usedQuads = 0;
+      let usedBuggies = 0;
+      bookings.forEach(b => {
+        if (b.activity_type !== 'quad') return;
+        if (existingBooking && b.id === existingBooking.id) return;
+        const bStart = new Date(b.start_time).getTime();
+        const bEnd = new Date(b.end_time).getTime();
+        if (slotStart.getTime() >= bStart && slotStart.getTime() < bEnd) {
+          usedQuads += (b.quads_count !== undefined ? b.quads_count : (b.horses_count || 0));
+          usedBuggies += (b.buggies_count !== undefined ? b.buggies_count : (b.ponies_count || 0));
+          quadBookingsInSlot++;
+        }
+      });
+      remainingQuads = Math.max(0, remainingQuads - usedQuads);
+      remainingBuggies = Math.max(0, remainingBuggies - usedBuggies);
     }
   }
 
@@ -118,6 +152,19 @@ export default function BookingModal({
       setHorsesCount(existingBooking.horses_count || (existingBooking.activity_type === 'equestrian' ? 1 : 0));
       setPoniesCount(existingBooking.ponies_count || 0);
       setAddPony(existingBooking.package_name !== 'pony_walk' && (existingBooking.ponies_count || 0) > 0);
+
+      if (existingBooking.activity_type === 'quad') {
+        setQuadPackageName(existingBooking.package_name || 'quad_simple_10km');
+        setQuadsCount(existingBooking.quads_count !== undefined ? existingBooking.quads_count : (existingBooking.horses_count ?? 1));
+        const buggyVal = existingBooking.buggies_count !== undefined ? existingBooking.buggies_count : (existingBooking.ponies_count || 0);
+        setHasBuggy(buggyVal > 0);
+        setHasExtraGuest(existingBooking.has_extra_guest !== undefined ? existingBooking.has_extra_guest : (existingBooking.notes ? existingBooking.notes.includes('სტუმარი') : false));
+      } else {
+        setQuadPackageName('quad_simple_10km');
+        setQuadsCount(activeDepartment === 'quad' ? 1 : 0);
+        setHasBuggy(false);
+        setHasExtraGuest(false);
+      }
     } else {
       setFullName('');
       setRoomNumber('');
@@ -141,6 +188,11 @@ export default function BookingModal({
       setHorsesCount(activeDepartment === 'equestrian' ? 1 : 0);
       setPoniesCount(0);
       setAddPony(false);
+
+      setQuadPackageName('quad_simple_10km');
+      setQuadsCount(activeDepartment === 'quad' ? 1 : 0);
+      setHasBuggy(false);
+      setHasExtraGuest(false);
     }
     setError('');
   }, [existingBooking, selectedSlot, isOpen]);
@@ -174,12 +226,49 @@ export default function BookingModal({
       if (packageName === 'walk_1km' || packageName === 'walk_2km' || packageName === 'pony_walk') actualDuration = 0.5;
       else if (packageName === 'tour_4km') actualDuration = 1.0;
       else if (packageName === 'tour_7km') actualDuration = 2.0;
+    } else if (activeDepartment === 'quad') {
+      if (quadPackageName === 'quad_simple_10km') actualDuration = 1.0;
+      else if (quadPackageName === 'quad_medium_24km') actualDuration = 2.0;
+      else if (quadPackageName === 'quad_hard_32km') actualDuration = 3.0;
     }
     
+    if (activeDepartment === 'quad' && !isBlocked) {
+      if (quadsCount <= 0 && !hasBuggy) {
+        setError('გთხოვთ აირჩიოთ მინიმუმ 1 კვადროციკლი ან ბაგი');
+        return;
+      }
+      const existingQuads = existingBooking?.activity_type === 'quad' 
+        ? (existingBooking.quads_count !== undefined ? existingBooking.quads_count : (existingBooking.horses_count || 0)) 
+        : 0;
+      const existingBuggies = existingBooking?.activity_type === 'quad' 
+        ? (existingBooking.buggies_count !== undefined ? existingBooking.buggies_count : (existingBooking.ponies_count || 0)) 
+        : 0;
+      if (quadsCount > (remainingQuads + existingQuads)) {
+        setError(`არჩეულია ${quadsCount} კვადრო, მაგრამ თავისუფალია მხოლოდ ${remainingQuads + existingQuads}`);
+        return;
+      }
+      if (hasBuggy && (remainingBuggies + existingBuggies) < 1) {
+        setError('ბაგი ამ დროისთვის უკვე დაკავებულია');
+        return;
+      }
+      if (!existingBooking && quadBookingsInSlot >= maxQuadBookings) {
+        setError(`ამ დროზე უკვე აღებულია მაქსიმალური ${maxQuadBookings} ჯავშანი`);
+        return;
+      }
+    }
+
     const endISO = new Date(startMs + actualDuration * 3600000).toISOString();
 
+    let cleanNotes = notes || '';
+    if (activeDepartment === 'quad') {
+      cleanNotes = cleanNotes.replace(' | +1 უკან სტუმარი', '').replace('+1 უკან სტუმარი', '').trim();
+      if (hasExtraGuest) {
+        cleanNotes = cleanNotes ? `${cleanNotes} | +1 უკან სტუმარი` : '+1 უკან სტუმარი';
+      }
+    }
+
     const bookingData = {
-      court_id: activeDepartment === 'equestrian' ? null : selectedCourtId,
+      court_id: (activeDepartment === 'equestrian' || activeDepartment === 'quad') ? null : selectedCourtId,
       full_name: isBlocked ? 'ადმინისტრაციული ბლოკი' : fullName.trim(),
       room_number: isBlocked ? 'BLOCKED' : roomNumber.trim(),
       start_time: startISO,
@@ -187,11 +276,14 @@ export default function BookingModal({
       rackets_status: isBlocked ? 'included' : racketsStatus,
       rackets_count: isBlocked ? 0 : racketsCount,
       activity_type: activeDepartment,
-      package_name: activeDepartment === 'equestrian' ? packageName : null,
-      horses_count: activeDepartment === 'equestrian' ? horsesCount : 0,
-      ponies_count: activeDepartment === 'equestrian' ? poniesCount : 0,
+      package_name: activeDepartment === 'equestrian' ? packageName : (activeDepartment === 'quad' ? quadPackageName : null),
+      horses_count: activeDepartment === 'equestrian' ? horsesCount : (activeDepartment === 'quad' ? quadsCount : 0),
+      ponies_count: activeDepartment === 'equestrian' ? poniesCount : (activeDepartment === 'quad' ? (hasBuggy ? 1 : 0) : 0),
+      quads_count: activeDepartment === 'quad' ? quadsCount : 0,
+      buggies_count: activeDepartment === 'quad' ? (hasBuggy ? 1 : 0) : 0,
+      has_extra_guest: activeDepartment === 'quad' ? hasExtraGuest : false,
       is_blocked: isBlocked,
-      notes: notes
+      notes: cleanNotes
     };
 
     if (existingBooking?.id) {
@@ -215,6 +307,11 @@ export default function BookingModal({
             {activeDepartment === 'equestrian' && (
               <span className="modal-court-badge" style={{ backgroundColor: '#8b5a2b' }}>
                 საჯინიბო
+              </span>
+            )}
+            {activeDepartment === 'quad' && (
+              <span className="modal-court-badge" style={{ backgroundColor: '#0284c7' }}>
+                🏍️ კვადრო / ბაგი
               </span>
             )}
           </h3>
@@ -338,6 +435,74 @@ export default function BookingModal({
                   {remainingPonies === 0 && <p className="text-xs text-danger margin-top-sm">ამ დროზე პონები აღარ არის თავისუფალი!</p>}
                 </div>
               )}
+            </>
+          )}
+
+          {/* --- QUAD / BUGGY SPECIFIC FIELDS --- */}
+          {activeDepartment === 'quad' && !isBlocked && (
+            <>
+              <div className="form-group">
+                <label className="form-label">ტურის მარშრუტი / პაკეტი</label>
+                <select 
+                  className="form-input" 
+                  value={quadPackageName} 
+                  onChange={(e) => setQuadPackageName(e.target.value)}
+                >
+                  <option value="quad_simple_10km">მარტივი ტური (10კმ) — 1 სთ (კვადრო: 300 ₾, ბაგი: 400 ₾)</option>
+                  <option value="quad_medium_24km">საშუალო სირთულის ტური (24კმ) — 2 სთ (კვადრო: 500 ₾, ბაგი: 600 ₾)</option>
+                  <option value="quad_hard_32km">რთული ტური (32კმ) — 3 სთ (კვადრო: 700 ₾, ბაგი: 800 ₾)</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">
+                  კვადროციკლების რაოდენობა (დარჩენილია: {remainingQuads + (existingBooking?.activity_type === 'quad' ? (existingBooking.horses_count || 0) : 0)} / {globalSettings?.quad_max_quads_per_slot || 9})
+                </label>
+                <select 
+                  className="form-input" 
+                  value={quadsCount} 
+                  onChange={(e) => setQuadsCount(Number(e.target.value))}
+                >
+                  <option value={0}>0 კვადრო (მხოლოდ ბაგი)</option>
+                  {Array.from({ 
+                    length: Math.max(1, Math.min(
+                      parseInt(globalSettings?.quad_max_quads_per_slot || 9, 10), 
+                      remainingQuads + (existingBooking?.activity_type === 'quad' ? (existingBooking.horses_count || 0) : 0)
+                    )) 
+                  }).map((_, i) => (
+                    <option key={i + 1} value={i + 1}>{i + 1} კვადრო</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+                <label className="checkbox-container" style={{ marginBottom: 0 }}>
+                  <input 
+                    type="checkbox" 
+                    checked={hasBuggy} 
+                    disabled={!hasBuggy && (remainingBuggies + (existingBooking?.activity_type === 'quad' ? (existingBooking.ponies_count || 0) : 0)) === 0}
+                    onChange={(e) => setHasBuggy(e.target.checked)} 
+                  />
+                  <span className="checkbox-checkmark"></span>
+                  <span className="checkbox-label-text">
+                    🚗 ბაგის დაჯავშნა (1 ცალი) {((remainingBuggies + (existingBooking?.activity_type === 'quad' ? (existingBooking.ponies_count || 0) : 0)) === 0 && !hasBuggy) ? '— [დაკავებულია]' : '— [თავისუფალია]'}
+                  </span>
+                </label>
+              </div>
+
+              <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
+                <label className="checkbox-container" style={{ marginBottom: 0 }}>
+                  <input 
+                    type="checkbox" 
+                    checked={hasExtraGuest} 
+                    onChange={(e) => setHasExtraGuest(e.target.checked)} 
+                  />
+                  <span className="checkbox-checkmark"></span>
+                  <span className="checkbox-label-text">
+                    👥 უკან დამატებითი სტუმარი (+80 ₾)
+                  </span>
+                </label>
+              </div>
             </>
           )}
 

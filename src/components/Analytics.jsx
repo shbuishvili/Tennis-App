@@ -22,7 +22,8 @@ export default function Analytics({ bookings, courts, activityLogs, activeDepart
       const bStart = new Date(b.start_time);
       const bType = b.activity_type || 'tennis';
       const isCorrectDepartment = (activeDepartment === 'equestrian' && bType === 'equestrian') ||
-                                  (activeDepartment === 'tennis' && bType !== 'equestrian');
+                                  (activeDepartment === 'quad' && bType === 'quad') ||
+                                  (activeDepartment === 'tennis' && bType !== 'equestrian' && bType !== 'quad');
       return bStart >= start && bStart <= end && isCorrectDepartment;
     });
   }, [bookings, startDate, endDate, activeDepartment]);
@@ -50,6 +51,8 @@ export default function Analytics({ bookings, courts, activityLogs, activeDepart
 
     let horsesRented = 0;
     let poniesRented = 0;
+    let quadsRented = 0;
+    let buggiesRented = 0;
 
     filteredBookings.forEach(b => {
       if (b.is_blocked) return;
@@ -59,15 +62,20 @@ export default function Analytics({ bookings, courts, activityLogs, activeDepart
         racketsRented += (b.rackets_count || 2);
       }
       
-      horsesRented += (b.horses_count || 0);
-      poniesRented += (b.ponies_count || 0);
+      if (b.activity_type === 'equestrian') {
+        horsesRented += (b.horses_count || 0);
+        poniesRented += (b.ponies_count || 0);
+      } else if (b.activity_type === 'quad') {
+        quadsRented += (b.horses_count || 0);
+        buggiesRented += (b.ponies_count || 0);
+      }
       
       if (courtCounts[b.court_id] !== undefined) {
         courtCounts[b.court_id]++;
       }
     });
 
-    return { totalBookings, racketsRented, courtCounts, horsesRented, poniesRented };
+    return { totalBookings, racketsRented, courtCounts, horsesRented, poniesRented, quadsRented, buggiesRented };
   }, [filteredBookings, courts]);
 
   return (
@@ -120,6 +128,23 @@ export default function Analytics({ bookings, courts, activityLogs, activeDepart
             <p className="stat-label" style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '4px' }}>სულ გაქირავებული ჩოგანი</p>
             <h3 className="stat-value" style={{ fontSize: '2rem', color: '#fff' }}>{stats.racketsRented}</h3>
           </div>
+        ) : activeDepartment === 'quad' ? (
+          <>
+            <div className="stat-card glass-panel" style={{ padding: '20px', borderRadius: '16px' }}>
+              <div className="stat-icon-wrapper" style={{ background: 'rgba(255, 255, 255, 0.1)', color: '#fff', padding: '12px', borderRadius: '50%', display: 'inline-flex', marginBottom: '12px' }}>
+                <Activity size={24} />
+              </div>
+              <p className="stat-label" style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '4px' }}>სულ გაცემული კვადრო</p>
+              <h3 className="stat-value" style={{ fontSize: '2rem', color: '#fff' }}>{stats.quadsRented}</h3>
+            </div>
+            <div className="stat-card glass-panel" style={{ padding: '20px', borderRadius: '16px' }}>
+              <div className="stat-icon-wrapper" style={{ background: 'rgba(255, 255, 255, 0.1)', color: '#fff', padding: '12px', borderRadius: '50%', display: 'inline-flex', marginBottom: '12px' }}>
+                <Activity size={24} />
+              </div>
+              <p className="stat-label" style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '4px' }}>სულ გაცემული ბაგი</p>
+              <h3 className="stat-value" style={{ fontSize: '2rem', color: '#fff' }}>{stats.buggiesRented}</h3>
+            </div>
+          </>
         ) : (
           <>
             <div className="stat-card glass-panel" style={{ padding: '20px', borderRadius: '16px' }}>

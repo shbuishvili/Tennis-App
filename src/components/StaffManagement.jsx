@@ -287,9 +287,10 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
               >
-                <option value="all">ყველა (ორივე)</option>
+                <option value="all">ყველა (სრული წვდომა)</option>
                 <option value="tennis">🎾 მხოლოდ ტენისი</option>
                 <option value="equestrian">🐴 მხოლოდ საჯინიბო</option>
+                <option value="quad">🏍️ მხოლოდ კვადრო / ბაგი</option>
               </select>
             </div>
 
@@ -338,7 +339,8 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
                       <td>
                         <span className="role-tag" style={{ background: 'rgba(255,255,255,0.1)' }}>
                           {user.department === 'tennis' ? '🎾 ტენისი' : 
-                           user.department === 'equestrian' ? '🐴 საჯინიბო' : '🌐 ყველა'}
+                           user.department === 'equestrian' ? '🐴 საჯინიბო' :
+                           user.department === 'quad' ? '🏍️ კვადრო' : '🌐 ყველა'}
                         </span>
                       </td>
                       <td>
@@ -483,9 +485,10 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
                   value={editDepartment}
                   onChange={(e) => setEditDepartment(e.target.value)}
                 >
-                  <option value="all">ყველა (ორივე)</option>
+                  <option value="all">ყველა (სრული წვდომა)</option>
                   <option value="tennis">🎾 მხოლოდ ტენისი</option>
                   <option value="equestrian">🐴 მხოლოდ საჯინიბო</option>
+                  <option value="quad">🏍️ მხოლოდ კვადრო / ბაგი</option>
                 </select>
               </div>
 
