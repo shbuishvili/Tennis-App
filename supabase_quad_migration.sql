@@ -7,7 +7,8 @@
 ALTER TABLE bookings 
 ADD COLUMN IF NOT EXISTS quads_count INT DEFAULT 0,
 ADD COLUMN IF NOT EXISTS buggies_count INT DEFAULT 0,
-ADD COLUMN IF NOT EXISTS has_extra_guest BOOLEAN DEFAULT FALSE;
+ADD COLUMN IF NOT EXISTS has_extra_guest BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS extra_guests_count INT DEFAULT 0;
 
 -- 2. არსებული კვადროს ჯავშნების სინქრონიზაცია (თუ უკვე არსებობს ჩანაწერები):
 UPDATE bookings 
