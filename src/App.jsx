@@ -99,8 +99,9 @@ export default function App() {
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [selectedBooking, setSelectedBooking] = useState(null);
 
-  // Customer search state
+  // Customer search & department filter state
   const [searchQuery, setSearchQuery] = useState('');
+  const [customerDeptFilter, setCustomerDeptFilter] = useState('all');
 
   // Settings & court creation states
   const [newCourtName, setNewCourtName] = useState('');
@@ -1292,19 +1293,48 @@ export default function App() {
     const customersMap = {};
     bookings.forEach(b => {
       if (b.is_blocked) return;
-      const key = `${b.full_name.trim().toLowerCase()}_${b.room_number.trim()}`;
+      if (!b.full_name || !b.room_number) return;
+      const dept = b.activity_type || 'tennis';
+      if (customerDeptFilter !== 'all' && dept !== customerDeptFilter) return;
+
+      const key = `${String(b.full_name).trim().toLowerCase()}_${String(b.room_number).trim()}`;
       if (!customersMap[key]) {
         customersMap[key] = {
           name: b.full_name,
           room: b.room_number,
           totalBookings: 0,
-          racketsPrefs: { included: 0, excluded: 0 },
+          tennisCount: 0,
+          equestrianCount: 0,
+          quadCount: 0,
+          racketsPrefs: { included: 0, rented: 0 },
+          horsesCount: 0,
+          poniesCount: 0,
+          quadsCount: 0,
+          buggiesCount: 0,
+          extraGuestsCount: 0,
           history: []
         };
       }
       customersMap[key].totalBookings++;
-      if (b.rackets_status) {
-        customersMap[key].racketsPrefs[b.rackets_status]++;
+      if (dept === 'tennis') {
+        customersMap[key].tennisCount++;
+        const status = b.rackets_status === 'excluded' ? 'rented' : (b.rackets_status || 'included');
+        customersMap[key].racketsPrefs[status] = (customersMap[key].racketsPrefs[status] || 0) + 1;
+      } else if (dept === 'equestrian') {
+        customersMap[key].equestrianCount++;
+        customersMap[key].horsesCount += (b.horses_count || 0);
+        customersMap[key].poniesCount += (b.ponies_count || 0);
+      } else if (dept === 'quad') {
+        customersMap[key].quadCount++;
+        customersMap[key].quadsCount += (b.quads_count !== undefined ? b.quads_count : (b.horses_count || 0));
+        customersMap[key].buggiesCount += (b.buggies_count !== undefined ? b.buggies_count : (b.ponies_count || 0));
+        const extraCount = (b.extra_guests_count !== undefined && b.extra_guests_count !== null && b.extra_guests_count > 0)
+          ? b.extra_guests_count
+          : (() => {
+              const m = b.notes && b.notes.match(/\+(\d+)\s*უკან\s*სტუმარი/);
+              return m ? parseInt(m[1], 10) : (b.has_extra_guest ? 1 : 0);
+            })();
+        customersMap[key].extraGuestsCount += extraCount;
       }
       customersMap[key].history.push(b);
     });
@@ -1428,7 +1458,7 @@ export default function App() {
               onClick={() => setActiveTab('settings')}
             >
               <SettingsIcon size={18} />
-              <span>განრიგი/კორტები</span>
+              <span>განრიგი</span>
             </button>
           )}
 
@@ -1947,8 +1977,78 @@ export default function App() {
           {activeTab === 'customers' && currentUser.role !== 'staff' && (
             <div className="customers-view animate-fade-in">
               <div className="customers-main glass-panel">
-                <div className="customers-header">
-                  <h3>სტუმრების ბაზა ({customersList.length})</h3>
+                <div className="customers-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                    <h3 style={{ margin: 0 }}>სტუმრების ბაზა ({customersList.length})</h3>
+                    
+                    {/* Department filter tabs */}
+                    <div style={{ display: 'inline-flex', background: 'rgba(255,255,255,0.06)', borderRadius: '20px', padding: '3px', gap: '4px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setCustomerDeptFilter('all')}
+                        style={{
+                          background: customerDeptFilter === 'all' ? 'var(--color-volt)' : 'transparent',
+                          color: customerDeptFilter === 'all' ? '#000' : 'var(--text-secondary)',
+                          border: 'none',
+                          borderRadius: '16px',
+                          padding: '4px 12px',
+                          fontSize: '0.8rem',
+                          fontWeight: 600,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        🌐 ყველა
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCustomerDeptFilter('tennis')}
+                        style={{
+                          background: customerDeptFilter === 'tennis' ? 'var(--color-volt)' : 'transparent',
+                          color: customerDeptFilter === 'tennis' ? '#000' : 'var(--text-secondary)',
+                          border: 'none',
+                          borderRadius: '16px',
+                          padding: '4px 12px',
+                          fontSize: '0.8rem',
+                          fontWeight: 600,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        🎾 ჩოგბურთი
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCustomerDeptFilter('equestrian')}
+                        style={{
+                          background: customerDeptFilter === 'equestrian' ? '#8b5a2b' : 'transparent',
+                          color: customerDeptFilter === 'equestrian' ? '#fff' : 'var(--text-secondary)',
+                          border: 'none',
+                          borderRadius: '16px',
+                          padding: '4px 12px',
+                          fontSize: '0.8rem',
+                          fontWeight: 600,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        🐴 საჯინიბო
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCustomerDeptFilter('quad')}
+                        style={{
+                          background: customerDeptFilter === 'quad' ? '#0284c7' : 'transparent',
+                          color: customerDeptFilter === 'quad' ? '#fff' : 'var(--text-secondary)',
+                          border: 'none',
+                          borderRadius: '16px',
+                          padding: '4px 12px',
+                          fontSize: '0.8rem',
+                          fontWeight: 600,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        🏍️ კვადრო / ბაგი
+                      </button>
+                    </div>
+                  </div>
                   
                   {/* Search bar */}
                   <div className="search-bar">
@@ -1975,7 +2075,8 @@ export default function App() {
                           <th>სტუმარი</th>
                           <th>ოთახი</th>
                           <th>ჯავშნები</th>
-                          <th>ჩოგნის პრეფერენცია</th>
+                          <th>აქტივობები</th>
+                          <th>დეტალები</th>
                           <th>ბოლო აქტივობა</th>
                         </tr>
                       </thead>
@@ -1983,7 +2084,7 @@ export default function App() {
                         {customersList.map((c, i) => {
                           const lastBooking = c.history[c.history.length - 1];
                           const formattedDate = lastBooking 
-                            ? new Date(lastBooking.start_time).toLocaleDateString('ka-GE', { month: 'short', day: 'numeric' })
+                            ? new Date(lastBooking.start_time).toLocaleDateString('ka-GE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
                             : '-';
                           return (
                             <tr key={i}>
@@ -1993,12 +2094,34 @@ export default function App() {
                                 <span className="badge badge-blue">{c.totalBookings} ჯავშანი</span>
                               </td>
                               <td>
-                                <span className="badge badge-volt">
-                                  Included: {c.racketsPrefs.included || 0}
-                                </span>
-                                <span className="badge badge-dark margin-left-xs">
-                                  Excluded: {c.racketsPrefs.excluded || 0}
-                                </span>
+                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                  {c.tennisCount > 0 && (
+                                    <span className="badge badge-volt">🎾 {c.tennisCount} ჩოგბურთი</span>
+                                  )}
+                                  {c.equestrianCount > 0 && (
+                                    <span className="badge" style={{ background: 'rgba(139, 90, 43, 0.2)', color: '#f59e0b', border: '1px solid rgba(139, 90, 43, 0.4)' }}>
+                                      🐴 {c.equestrianCount} საჯინიბო
+                                    </span>
+                                  )}
+                                  {c.quadCount > 0 && (
+                                    <span className="badge" style={{ background: 'rgba(2, 132, 199, 0.2)', color: '#38bdf8', border: '1px solid rgba(2, 132, 199, 0.4)' }}>
+                                      🏍️ {c.quadCount} კვადრო/ბაგი
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td>
+                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                  {c.tennisCount > 0 && (
+                                    <span>🎾 ჩოგანი: {c.racketsPrefs.included || 0} თავისი / {c.racketsPrefs.rented || 0} ნაქირ.</span>
+                                  )}
+                                  {c.equestrianCount > 0 && (
+                                    <span>🐴 ცხენი: {c.horsesCount}, პონი: {c.poniesCount}</span>
+                                  )}
+                                  {c.quadCount > 0 && (
+                                    <span>🏍️ კვადრო: {c.quadsCount}{c.buggiesCount > 0 ? `, 🚗 ბაგი: ${c.buggiesCount}` : ''}{c.extraGuestsCount > 0 ? `, 👥 +${c.extraGuestsCount} სტუმ.` : ''}</span>
+                                  )}
+                                </div>
                               </td>
                               <td>
                                 <span className="text-xs text-secondary">{formattedDate}</span>
