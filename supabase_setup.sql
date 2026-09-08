@@ -21,6 +21,7 @@ CREATE TABLE user_accounts (
   username VARCHAR(100) UNIQUE NOT NULL,
   password VARCHAR(255) NOT NULL, -- პაროლი (ტესტირებისთვის უბრალო ტექსტი, ან კლიენტის მხარეს ჰაშირებული)
   role VARCHAR(50) CHECK (role IN ('super_admin', 'manager', 'staff')) NOT NULL DEFAULT 'staff',
+  department VARCHAR(50) DEFAULT 'all', -- 'tennis', 'equestrian', 'all'
   full_name VARCHAR(100) NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
@@ -40,6 +41,13 @@ CREATE TABLE bookings (
   start_time TIMESTAMP WITH TIME ZONE NOT NULL,
   end_time TIMESTAMP WITH TIME ZONE NOT NULL,
   rackets_status VARCHAR(50) CHECK (rackets_status IN ('included', 'rented', 'excluded')),
+  activity_type VARCHAR(50) DEFAULT 'tennis', -- 'tennis', 'equestrian', 'quad'
+  horses_count INT DEFAULT 0,
+  ponies_count INT DEFAULT 0,
+  quads_count INT DEFAULT 0,
+  buggies_count INT DEFAULT 0,
+  has_extra_guest BOOLEAN DEFAULT FALSE,
+  package_name VARCHAR(100),
   is_blocked BOOLEAN DEFAULT FALSE,
   notes TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
