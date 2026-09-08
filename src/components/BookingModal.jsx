@@ -72,7 +72,7 @@ export default function BookingModal({
   const [quadPackageName, setQuadPackageName] = useState('quad_simple_10km');
   const [quadsCount, setQuadsCount] = useState(1);
   const [hasBuggy, setHasBuggy] = useState(false);
-  const [hasExtraGuest, setHasExtraGuest] = useState(false);
+  const [extraGuestsCount, setExtraGuestsCount] = useState(0);
 
   // Calculate remaining ponies for the selected slot
   let remainingPonies = parseInt(globalSettings?.eq_max_ponies_per_slot || 3);
@@ -158,12 +158,26 @@ export default function BookingModal({
         setQuadsCount(existingBooking.quads_count !== undefined ? existingBooking.quads_count : (existingBooking.horses_count ?? 1));
         const buggyVal = existingBooking.buggies_count !== undefined ? existingBooking.buggies_count : (existingBooking.ponies_count || 0);
         setHasBuggy(buggyVal > 0);
-        setHasExtraGuest(existingBooking.has_extra_guest !== undefined ? existingBooking.has_extra_guest : (existingBooking.notes ? existingBooking.notes.includes('სტუმარი') : false));
+        
+        let extraCount = 0;
+        if (existingBooking.extra_guests_count !== undefined && existingBooking.extra_guests_count !== null) {
+          extraCount = Number(existingBooking.extra_guests_count);
+        } else if (existingBooking.notes) {
+          const match = existingBooking.notes.match(/\+(\d+)\s*უკან\s*სტუმარი/);
+          if (match) {
+            extraCount = parseInt(match[1], 10);
+          } else if (existingBooking.has_extra_guest || existingBooking.notes.includes('სტუმარი')) {
+            extraCount = 1;
+          }
+        } else if (existingBooking.has_extra_guest) {
+          extraCount = 1;
+        }
+        setExtraGuestsCount(extraCount);
       } else {
         setQuadPackageName('quad_simple_10km');
         setQuadsCount(activeDepartment === 'quad' ? 1 : 0);
         setHasBuggy(false);
-        setHasExtraGuest(false);
+        setExtraGuestsCount(0);
       }
     } else {
       setFullName('');
@@ -192,7 +206,7 @@ export default function BookingModal({
       setQuadPackageName('quad_simple_10km');
       setQuadsCount(activeDepartment === 'quad' ? 1 : 0);
       setHasBuggy(false);
-      setHasExtraGuest(false);
+      setExtraGuestsCount(0);
     }
     setError('');
   }, [existingBooking, selectedSlot, isOpen]);
@@ -237,17 +251,11 @@ export default function BookingModal({
         setError('გთხოვთ აირჩიოთ მინიმუმ 1 კვადროციკლი ან ბაგი');
         return;
       }
-      const existingQuads = existingBooking?.activity_type === 'quad' 
-        ? (existingBooking.quads_count !== undefined ? existingBooking.quads_count : (existingBooking.horses_count || 0)) 
-        : 0;
-      const existingBuggies = existingBooking?.activity_type === 'quad' 
-        ? (existingBooking.buggies_count !== undefined ? existingBooking.buggies_count : (existingBooking.ponies_count || 0)) 
-        : 0;
-      if (quadsCount > (remainingQuads + existingQuads)) {
-        setError(`არჩეულია ${quadsCount} კვადრო, მაგრამ თავისუფალია მხოლოდ ${remainingQuads + existingQuads}`);
+      if (quadsCount > remainingQuads) {
+        setError(`არჩეულია ${quadsCount} კვადრო, მაგრამ თავისუფალია მხოლოდ ${remainingQuads}`);
         return;
       }
-      if (hasBuggy && (remainingBuggies + existingBuggies) < 1) {
+      if (hasBuggy && remainingBuggies < 1) {
         setError('ბაგი ამ დროისთვის უკვე დაკავებულია');
         return;
       }
@@ -261,9 +269,15 @@ export default function BookingModal({
 
     let cleanNotes = notes || '';
     if (activeDepartment === 'quad') {
-      cleanNotes = cleanNotes.replace(' | +1 უკან სტუმარი', '').replace('+1 უკან სტუმარი', '').trim();
-      if (hasExtraGuest) {
-        cleanNotes = cleanNotes ? `${cleanNotes} | +1 უკან სტუმარი` : '+1 უკან სტუმარი';
+      cleanNotes = cleanNotes
+        .replace(/\|\s*\+\d+\s*უკან\s*სტუმარი(\s*\(\+\d+\s*₾\))?/g, '')
+        .replace(/\+\d+\s*უკან\s*სტუმარი(\s*\(\+\d+\s*₾\))?/g, '')
+        .replace(' | +1 უკან სტუმარი', '')
+        .replace('+1 უკან სტუმარი', '')
+        .trim();
+      if (extraGuestsCount > 0) {
+        const guestText = `+${extraGuestsCount} უკან სტუმარი (+${extraGuestsCount * 80} ₾)`;
+        cleanNotes = cleanNotes ? `${cleanNotes} | ${guestText}` : guestText;
       }
     }
 
@@ -281,7 +295,8 @@ export default function BookingModal({
       ponies_count: activeDepartment === 'equestrian' ? poniesCount : (activeDepartment === 'quad' ? (hasBuggy ? 1 : 0) : 0),
       quads_count: activeDepartment === 'quad' ? quadsCount : 0,
       buggies_count: activeDepartment === 'quad' ? (hasBuggy ? 1 : 0) : 0,
-      has_extra_guest: activeDepartment === 'quad' ? hasExtraGuest : false,
+      extra_guests_count: activeDepartment === 'quad' ? extraGuestsCount : 0,
+      has_extra_guest: activeDepartment === 'quad' ? (extraGuestsCount > 0) : false,
       is_blocked: isBlocked,
       notes: cleanNotes
     };
@@ -456,18 +471,24 @@ export default function BookingModal({
 
               <div className="form-group">
                 <label className="form-label">
-                  კვადროციკლების რაოდენობა (დარჩენილია: {remainingQuads + (existingBooking?.activity_type === 'quad' ? (existingBooking.horses_count || 0) : 0)} / {globalSettings?.quad_max_quads_per_slot || 9})
+                  კვადროციკლების რაოდენობა (დარჩენილია: {remainingQuads} / {globalSettings?.quad_max_quads_per_slot || 9})
                 </label>
                 <select 
                   className="form-input" 
                   value={quadsCount} 
-                  onChange={(e) => setQuadsCount(Number(e.target.value))}
+                  onChange={(e) => {
+                    const newCount = Number(e.target.value);
+                    setQuadsCount(newCount);
+                    if (extraGuestsCount > newCount && newCount > 0) {
+                      setExtraGuestsCount(newCount);
+                    }
+                  }}
                 >
                   <option value={0}>0 კვადრო (მხოლოდ ბაგი)</option>
                   {Array.from({ 
                     length: Math.max(1, Math.min(
                       parseInt(globalSettings?.quad_max_quads_per_slot || 9, 10), 
-                      remainingQuads + (existingBooking?.activity_type === 'quad' ? (existingBooking.horses_count || 0) : 0)
+                      remainingQuads
                     )) 
                   }).map((_, i) => (
                     <option key={i + 1} value={i + 1}>{i + 1} კვადრო</option>
@@ -480,12 +501,12 @@ export default function BookingModal({
                   <input 
                     type="checkbox" 
                     checked={hasBuggy} 
-                    disabled={!hasBuggy && (remainingBuggies + (existingBooking?.activity_type === 'quad' ? (existingBooking.ponies_count || 0) : 0)) === 0}
+                    disabled={!hasBuggy && remainingBuggies === 0}
                     onChange={(e) => setHasBuggy(e.target.checked)} 
                   />
                   <span className="checkbox-checkmark"></span>
                   <span className="checkbox-label-text">
-                    🚗 ბაგის დაჯავშნა (1 ცალი) {((remainingBuggies + (existingBooking?.activity_type === 'quad' ? (existingBooking.ponies_count || 0) : 0)) === 0 && !hasBuggy) ? '— [დაკავებულია]' : '— [თავისუფალია]'}
+                    🚗 ბაგის დაჯავშნა (1 ცალი) {(remainingBuggies === 0 && !hasBuggy) ? '— [დაკავებულია]' : '— [თავისუფალია]'}
                   </span>
                 </label>
               </div>
@@ -494,14 +515,38 @@ export default function BookingModal({
                 <label className="checkbox-container" style={{ marginBottom: 0 }}>
                   <input 
                     type="checkbox" 
-                    checked={hasExtraGuest} 
-                    onChange={(e) => setHasExtraGuest(e.target.checked)} 
+                    checked={extraGuestsCount > 0} 
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setExtraGuestsCount(1);
+                      } else {
+                        setExtraGuestsCount(0);
+                      }
+                    }} 
                   />
                   <span className="checkbox-checkmark"></span>
                   <span className="checkbox-label-text">
-                    👥 უკან დამატებითი სტუმარი (+80 ₾)
+                    👥 უკან დამატებითი სტუმარი (+80 ₾ თითოზე)
                   </span>
                 </label>
+
+                {extraGuestsCount > 0 && (
+                  <div className="animate-fade-in" style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingLeft: '28px', marginTop: '4px' }}>
+                    <span className="text-sm text-secondary">რაოდენობა:</span>
+                    <select
+                      className="form-input"
+                      style={{ width: 'auto', minWidth: '180px', padding: '6px 10px', fontSize: '0.85rem' }}
+                      value={extraGuestsCount}
+                      onChange={(e) => setExtraGuestsCount(Number(e.target.value))}
+                    >
+                      {Array.from({ length: Math.max(1, quadsCount || 1) }).map((_, i) => (
+                        <option key={i + 1} value={i + 1}>
+                          +{i + 1} სტუმარი (+{(i + 1) * 80} ₾)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             </>
           )}

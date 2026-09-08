@@ -195,9 +195,17 @@ export default function QuadCalendar({
                                     <span>🚗 {booking.buggies_count !== undefined ? booking.buggies_count : booking.ponies_count} ბაგი</span>
                                   )}
                                 </div>
-                                {(booking.has_extra_guest || (booking.notes && booking.notes.includes('სტუმარი'))) && (
-                                  <span style={{ fontSize: '10px', color: '#fef08a' }}>👥 +უკან სტუმარი</span>
-                                )}
+                                {(() => {
+                                  const extraCount = (booking.extra_guests_count !== undefined && booking.extra_guests_count !== null && booking.extra_guests_count > 0)
+                                    ? booking.extra_guests_count
+                                    : (() => {
+                                        const m = booking.notes && booking.notes.match(/\+(\d+)\s*უკან\s*სტუმარი/);
+                                        return m ? parseInt(m[1], 10) : (booking.has_extra_guest ? 1 : 0);
+                                      })();
+                                  return extraCount > 0 ? (
+                                    <span style={{ fontSize: '10px', color: '#fef08a' }}>👥 +{extraCount} უკან სტუმარი</span>
+                                  ) : null;
+                                })()}
                               </>
                             )}
                           </div>
