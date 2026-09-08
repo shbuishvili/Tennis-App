@@ -596,17 +596,30 @@ export default function App() {
 
     try {
       if (isSupabaseConnected) {
+        let payload = { ...bookingData };
         if (bookingData.id) {
-          const { error } = await supabase
+          let { error } = await supabase
             .from('bookings')
-            .update(bookingData)
+            .update(payload)
             .eq('id', bookingData.id);
-          if (error) throw error;
+          if (error && error.message && error.message.includes('extra_guests_count')) {
+            delete payload.extra_guests_count;
+            const res = await supabase.from('bookings').update(payload).eq('id', bookingData.id);
+            if (res.error) throw res.error;
+          } else if (error) {
+            throw error;
+          }
         } else {
-          const { error } = await supabase
+          let { error } = await supabase
             .from('bookings')
-            .insert(bookingData);
-          if (error) throw error;
+            .insert(payload);
+          if (error && error.message && error.message.includes('extra_guests_count')) {
+            delete payload.extra_guests_count;
+            const res = await supabase.from('bookings').insert(payload);
+            if (res.error) throw res.error;
+          } else if (error) {
+            throw error;
+          }
         }
         
         // Refresh bookings
