@@ -29,6 +29,7 @@ import {
 
 import Analytics from './components/Analytics';
 import EquestrianCalendar from './components/EquestrianCalendar';
+import QuadCalendar from './components/QuadCalendar';
 
 const DEFAULT_COURTS = [
   { id: 1, name: 'კორტი 1 (Clay)', type: 'Clay', is_active: true, status: 'active' },
@@ -38,9 +39,9 @@ const DEFAULT_COURTS = [
 ];
 
 const DEFAULT_SETTINGS = [
-  { day_type: 'weekday', open_time: '08:00', close_time: '22:00', is_active: true },
-  { day_type: 'weekend', open_time: '09:00', close_time: '23:00', is_active: true },
-  { day_type: 'holiday', open_time: '10:00', close_time: '18:00', is_active: true }
+  { day_type: 'weekday', open_time: '08:00:00', close_time: '22:00:00', is_active: true },
+  { day_type: 'weekend', open_time: '09:00:00', close_time: '23:00:00', is_active: true },
+  { day_type: 'holiday', open_time: '10:00:00', close_time: '18:00:00', is_active: true }
 ];
 
 const TennisRacketIcon = ({ size = 24, className = "" }) => (
@@ -68,7 +69,7 @@ const TennisRacketIcon = ({ size = 24, className = "" }) => (
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'calendar', 'customers', 'staff', 'settings', 'profile', 'analytics'
-  const [activeDepartment, setActiveDepartment] = useState('tennis'); // 'tennis' or 'equestrian'
+  const [activeDepartment, setActiveDepartment] = useState('tennis'); // 'tennis', 'equestrian', or 'quad'
   const [courts, setCourts] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [settings, setSettings] = useState([]);
@@ -78,7 +79,13 @@ export default function App() {
     allow_staff_analytics: 'false',
     eq_max_bookings_per_slot: '2',
     eq_max_horses_per_slot: '6',
-    eq_max_ponies_per_slot: '3'
+    eq_max_ponies_per_slot: '3',
+    quad_max_bookings_per_slot: '6',
+    quad_max_quads_per_slot: '9',
+    quad_max_buggies_per_slot: '1',
+    quad_start_hour: '10',
+    quad_end_hour: '20',
+    quad_closures: '[]'
   });
   const [courtClosures, setCourtClosures] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
@@ -110,6 +117,11 @@ export default function App() {
   const [eqClosureDateEnd, setEqClosureDateEnd] = useState('');
   const [eqClosureReason, setEqClosureReason] = useState('ღონისძიება');
 
+  // Quad closures creation states
+  const [quadClosureDateStart, setQuadClosureDateStart] = useState('');
+  const [quadClosureDateEnd, setQuadClosureDateEnd] = useState('');
+  const [quadClosureReason, setQuadClosureReason] = useState('ღონისძიება');
+
   // Change Password state for current user
   const [myOldPassword, setMyOldPassword] = useState('');
   const [myNewPassword, setMyNewPassword] = useState('');
@@ -131,6 +143,8 @@ export default function App() {
       }
       if (parsedUser.department === 'equestrian') {
         setActiveDepartment('equestrian');
+      } else if (parsedUser.department === 'quad') {
+        setActiveDepartment('quad');
       }
     } else {
       setActiveTab('login');
@@ -375,7 +389,7 @@ export default function App() {
 
     // Court closure / maintenance check (TENNIS ONLY)
     let court = null;
-    if (bookingData.activity_type !== 'equestrian') {
+    if (bookingData.activity_type !== 'equestrian' && bookingData.activity_type !== 'quad') {
       court = courts.find(c => c.id === bookingData.court_id);
       const bookingDate = new Date(bookingData.start_time);
       const closure = getCourtClosureForDate(bookingData.court_id, bookingDate);
@@ -388,7 +402,7 @@ export default function App() {
     }
 
     // Overlap check (TENNIS ONLY)
-    if (bookingData.activity_type !== 'equestrian') {
+    if (bookingData.activity_type !== 'equestrian' && bookingData.activity_type !== 'quad') {
       const newStart = new Date(bookingData.start_time).getTime();
       const newEnd = new Date(bookingData.end_time).getTime();
       
@@ -444,7 +458,7 @@ export default function App() {
           return;
         }
       }
-    } else {
+    } else if (bookingData.activity_type === 'equestrian') {
       // --- EQUESTRIAN CHECKS ---
       const newStart = new Date(bookingData.start_time).getTime();
       const newEnd = new Date(bookingData.end_time).getTime();
@@ -486,13 +500,7 @@ export default function App() {
           if (time >= bStart && time < bEnd) {
             activeHorsesCount += (b.horses_count || 0);
             activePoniesCount += (b.ponies_count || 0);
-          }
-          
-          // Count bookings starting EXACTLY at this time (since the 2 booking limit applies to the start time)
-          // Wait, the rule is "in the same time slot we have a limit of 2 bookings". 
-          // If a booking is 2 hours long, does it prevent new bookings? Yes, it consumes resources, but the limit of 2 bookings per slot usually means "you can only fit 2 parallel tracks". We'll count active parallel bookings.
-          if (time >= bStart && time < bEnd) {
-             activeBookingsCount++;
+            activeBookingsCount++;
           }
         });
 
@@ -509,6 +517,72 @@ export default function App() {
         if (activePoniesCount + reqPonies > maxPonies) {
           limitExceeded = true;
           limitMsg = `შეცდომა: ამ დროს აღარ არის საკმარისი პონი. მაქსიმუმ დასაშვებია ${maxPonies}.`;
+          break;
+        }
+      }
+
+      if (limitExceeded) {
+        alert(limitMsg);
+        setLoading(false);
+        return;
+      }
+    } else if (bookingData.activity_type === 'quad') {
+      // --- QUAD / BUGGY CHECKS ---
+      const newStart = new Date(bookingData.start_time).getTime();
+      const newEnd = new Date(bookingData.end_time).getTime();
+      const bookingDateStr = new Date(bookingData.start_time).toISOString().split('T')[0];
+
+      // Check Quad closures
+      const quadClosures = JSON.parse(globalSettings.quad_closures || '[]');
+      const closure = quadClosures.find(c => c.date === bookingDateStr);
+      if (closure) {
+        alert(`შეცდომა: კვადროციკლები და ბაგები დაკეტილია (${closure.reason}) არჩეულ დღეს!`);
+        setLoading(false);
+        return;
+      }
+      
+      const maxQuadBookings = parseInt(globalSettings.quad_max_bookings_per_slot || 6, 10);
+      const maxQuads = parseInt(globalSettings.quad_max_quads_per_slot || 9, 10);
+      const maxBuggies = parseInt(globalSettings.quad_max_buggies_per_slot || 1, 10);
+      
+      const reqQuads = bookingData.quads_count !== undefined ? bookingData.quads_count : (bookingData.horses_count || 0);
+      const reqBuggies = bookingData.buggies_count !== undefined ? bookingData.buggies_count : (bookingData.ponies_count || 0);
+
+      let limitExceeded = false;
+      let limitMsg = '';
+
+      for (let time = newStart; time < newEnd; time += 30 * 60 * 1000) {
+        let activeBookingsCount = 0;
+        let activeQuadsCount = 0;
+        let activeBuggiesCount = 0;
+
+        bookings.forEach(b => {
+          if (b.activity_type !== 'quad') return;
+          if (bookingData.id && b.id === bookingData.id) return; // exclude self
+          
+          const bStart = new Date(b.start_time).getTime();
+          const bEnd = new Date(b.end_time).getTime();
+          
+          if (time >= bStart && time < bEnd) {
+            activeQuadsCount += (b.quads_count !== undefined ? b.quads_count : (b.horses_count || 0));
+            activeBuggiesCount += (b.buggies_count !== undefined ? b.buggies_count : (b.ponies_count || 0));
+            activeBookingsCount++;
+          }
+        });
+
+        if (activeBookingsCount >= maxQuadBookings) {
+          limitExceeded = true;
+          limitMsg = `შეცდომა: ამ დროს უკვე აღებულია მაქსიმალური ${maxQuadBookings} ჯავშანი.`;
+          break;
+        }
+        if (activeQuadsCount + reqQuads > maxQuads) {
+          limitExceeded = true;
+          limitMsg = `შეცდომა: ამ დროს აღარ არის საკმარისი კვადროციკლი (დარჩენილია ${Math.max(0, maxQuads - activeQuadsCount)}, მოთხოვნილია ${reqQuads}).`;
+          break;
+        }
+        if (activeBuggiesCount + reqBuggies > maxBuggies) {
+          limitExceeded = true;
+          limitMsg = `შეცდომა: ამ დროს ბაგი უკვე დაკავებულია (მაქსიმუმ ${maxBuggies} ბაგია დაშვებული).`;
           break;
         }
       }
@@ -899,6 +973,67 @@ export default function App() {
     }
   };
 
+  // Add Quad Closure
+  const handleAddQuadClosure = async (e) => {
+    e.preventDefault();
+    if (!quadClosureDateStart || !quadClosureDateEnd || !quadClosureReason.trim()) return;
+
+    const start = new Date(quadClosureDateStart);
+    const end = new Date(quadClosureDateEnd);
+    if (end < start) {
+      alert('დასრულების თარიღი უნდა იყოს დაწყების თარიღის შემდეგ!');
+      return;
+    }
+
+    const datesToClose = [];
+    const cur = new Date(start);
+    while (cur <= end) {
+      datesToClose.push(cur.toISOString().split('T')[0]);
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    setLoading(true);
+    try {
+      const currentClosures = JSON.parse(globalSettings.quad_closures || '[]');
+      const existingKeys = new Set(currentClosures.map(c => c.date));
+      
+      const newClosures = datesToClose
+        .filter(d => !existingKeys.has(d))
+        .map(d => ({
+          id: Date.now() + Math.random(),
+          date: d,
+          reason: quadClosureReason.trim()
+        }));
+        
+      if (newClosures.length > 0) {
+        const updatedClosures = [...currentClosures, ...newClosures];
+        handleUpdateGlobalSetting('quad_closures', JSON.stringify(updatedClosures));
+      }
+
+      setQuadClosureDateStart('');
+      setQuadClosureDateEnd('');
+      setQuadClosureReason('');
+    } catch (err) {
+      alert('ჩაკეტვის დამატებისას მოხდა შეცდომა: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Delete Quad Closure
+  const handleDeleteQuadClosure = async (closureId) => {
+    setLoading(true);
+    try {
+      const currentClosures = JSON.parse(globalSettings.quad_closures || '[]');
+      const updatedClosures = currentClosures.filter(c => c.id !== closureId);
+      handleUpdateGlobalSetting('quad_closures', JSON.stringify(updatedClosures));
+    } catch (err) {
+      alert('ჩაკეტვის გაუქმებისას მოხდა შეცდომა: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Change self password helper
   const handleChangePassword = async (e) => {
     e.preventDefault();
@@ -993,7 +1128,8 @@ export default function App() {
       const start = new Date(b.start_time);
       const bType = b.activity_type || 'tennis';
       const isCorrectDepartment = (activeDepartment === 'equestrian' && bType === 'equestrian') ||
-                                  (activeDepartment === 'tennis' && bType !== 'equestrian');
+                                  (activeDepartment === 'quad' && bType === 'quad') ||
+                                  (activeDepartment === 'tennis' && bType !== 'equestrian' && bType !== 'quad');
       return start.toDateString() === todayStr && isCorrectDepartment;
     });
 
@@ -1005,6 +1141,8 @@ export default function App() {
     let racketsExcluded = 0; // rented
     let horsesRented = 0;
     let poniesRented = 0;
+    let quadsRented = 0;
+    let buggiesRented = 0;
 
     todayBookings.forEach(b => {
       if (!b.is_blocked) {
@@ -1013,8 +1151,13 @@ export default function App() {
         } else {
           racketsExcluded += (b.rackets_count || 2);
         }
-        horsesRented += (b.horses_count || 0);
-        poniesRented += (b.ponies_count || 0);
+        if (b.activity_type === 'equestrian') {
+          horsesRented += (b.horses_count || 0);
+          poniesRented += (b.ponies_count || 0);
+        } else if (b.activity_type === 'quad') {
+          quadsRented += (b.quads_count !== undefined ? b.quads_count : (b.horses_count || 0));
+          buggiesRented += (b.buggies_count !== undefined ? b.buggies_count : (b.ponies_count || 0));
+        }
       }
     });
 
@@ -1051,7 +1194,9 @@ export default function App() {
         : 0, // tracking rental demand (racketsExcluded)
       occupancyRate,
       horsesRented,
-      poniesRented
+      poniesRented,
+      quadsRented,
+      buggiesRented
     };
   };
 
@@ -1200,6 +1345,12 @@ export default function App() {
               >
                 🐴 საჯინიბო
               </button>
+              <button 
+                className={`sidebar-dep-btn ${activeDepartment === 'quad' ? 'active' : ''}`}
+                onClick={() => setActiveDepartment('quad')}
+              >
+                🏍️ კვადრო / ბაგი
+              </button>
             </div>
           )}
         </div>
@@ -1274,7 +1425,7 @@ export default function App() {
               onClick={() => setActiveTab('analytics')}
             >
               <BarChart2 size={18} />
-              <span>ანალიტიკა & ლოგები</span>
+              <span>ანალიტიკა</span>
             </button>
           )}
 
@@ -1283,20 +1434,14 @@ export default function App() {
             className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`}
             onClick={() => setActiveTab('profile')}
           >
-            <Lock size={18} />
-            <span>პაროლის შეცვლა</span>
+            <Key size={18} />
+            <span>პროფილი</span>
           </button>
         </nav>
 
         <div className="sidebar-footer">
-          <div className="db-status flex-align margin-bottom-sm">
-            <span className={`status-indicator ${isSupabaseConnected ? 'connected' : 'local'}`}></span>
-            <span className="text-xs">
-              {isSupabaseConnected ? 'Connected' : 'Local Storage Mode'}
-            </span>
-          </div>
-          <button className="btn btn-danger btn-xs width-100 flex-align justify-center" onClick={handleSignOut}>
-            <LogOut size={12} className="margin-right-xs" />
+          <button className="btn btn-secondary btn-block logout-btn" onClick={handleSignOut}>
+            <LogOut size={16} />
             გასვლა
           </button>
         </div>
@@ -1311,6 +1456,7 @@ export default function App() {
               {activeTab === 'dashboard' && 'ადმინისტრატორის პანელი'}
               {activeTab === 'calendar' && activeDepartment === 'tennis' && 'კორტების განრიგი'}
               {activeTab === 'calendar' && activeDepartment === 'equestrian' && 'საჯინიბოს განრიგი'}
+              {activeTab === 'calendar' && activeDepartment === 'quad' && 'კვადროციკლების განრიგი'}
               {activeTab === 'customers' && 'სტუმრების აღრიცხვა'}
               {activeTab === 'staff' && 'თანამშრომელთა მართვა'}
               {activeTab === 'settings' && 'კორტების პარამეტრები'}
@@ -1365,8 +1511,8 @@ export default function App() {
                 const slotTime = `${String(ge.getUTCHours()).padStart(2,'0')}:${String(mins).padStart(2,'0')}`;
 
                 setSelectedSlot({ 
-                  courtId: activeDepartment === 'equestrian' ? null : (courts[0]?.id || 1), 
-                  courtName: activeDepartment === 'equestrian' ? 'საჯინიბო' : (courts[0]?.name || 'კორტი 1'),
+                  courtId: (activeDepartment === 'equestrian' || activeDepartment === 'quad') ? null : (courts[0]?.id || 1), 
+                  courtName: activeDepartment === 'equestrian' ? 'საჯინიბო' : (activeDepartment === 'quad' ? 'კვადრო' : (courts[0]?.name || 'კორტი 1')),
                   time: null,
                   slotDate,
                   slotTime
@@ -1426,6 +1572,28 @@ export default function App() {
                       <div className="stat-info">
                         <span className="stat-label">კორტების დატვირთვა</span>
                         <span className="stat-value">{stats.occupancyRate}%</span>
+                      </div>
+                    </div>
+                  </>
+                ) : activeDepartment === 'quad' ? (
+                  <>
+                    <div className="stat-card glass-panel">
+                      <div className="stat-icon-wrapper volt">
+                        <Trophy size={20} />
+                      </div>
+                      <div className="stat-info">
+                        <span className="stat-label">გაცემული კვადროები</span>
+                        <span className="stat-value">{stats.quadsRented || 0}</span>
+                      </div>
+                    </div>
+
+                    <div className="stat-card glass-panel">
+                      <div className="stat-icon-wrapper orange">
+                        <Trophy size={20} />
+                      </div>
+                      <div className="stat-info">
+                        <span className="stat-label">გაცემული ბაგები</span>
+                        <span className="stat-value">{stats.buggiesRented || 0}</span>
                       </div>
                     </div>
                   </>
@@ -1562,9 +1730,9 @@ export default function App() {
                                 </div>
                                 <div className="timeline-body-footer">
                                   <span className="timeline-court">
-                                    {b.activity_type === 'equestrian' ? '🐴 საჯინიბო' : (court ? court.name : 'წაშლილი კორტი')}
+                                    {b.activity_type === 'equestrian' ? '🐴 საჯინიბო' : (b.activity_type === 'quad' ? '🏍️ კვადრო' : (court ? court.name : 'წაშლილი კორტი'))}
                                   </span>
-                                  {!b.is_blocked && b.activity_type !== 'equestrian' && (
+                                  {!b.is_blocked && b.activity_type !== 'equestrian' && b.activity_type !== 'quad' && (
                                     <span className={`racket-badge ${b.rackets_status}`}>
                                       🎾 {b.rackets_status === 'included' ? 'თავისი ჩოგანი' : 'ნაქირავები'}
                                     </span>
@@ -1573,6 +1741,12 @@ export default function App() {
                                     <span className="racket-badge">
                                       {b.horses_count > 0 && `🐴 ${b.horses_count}`}
                                       {b.ponies_count > 0 && ` 🐎 ${b.ponies_count}`}
+                                    </span>
+                                  )}
+                                  {!b.is_blocked && b.activity_type === 'quad' && (
+                                    <span className="racket-badge">
+                                      {(b.quads_count !== undefined ? b.quads_count : (b.horses_count || 0)) > 0 && `🏍️ ${b.quads_count !== undefined ? b.quads_count : b.horses_count}`}
+                                      {(b.buggies_count !== undefined ? b.buggies_count : (b.ponies_count || 0)) > 0 && ` 🚗 ${b.buggies_count !== undefined ? b.buggies_count : b.ponies_count}`}
                                     </span>
                                   )}
                                 </div>
@@ -1596,6 +1770,14 @@ export default function App() {
                   selectedDate={selectedDate}
                   bookings={bookings}
                   eqClosures={JSON.parse(globalSettings.eq_closures || '[]')}
+                  globalSettings={globalSettings}
+                  onSlotClick={(time, existingBooking) => handleSlotClick(null, time, 'active', null, existingBooking)}
+                />
+              ) : activeDepartment === 'quad' ? (
+                <QuadCalendar 
+                  selectedDate={selectedDate}
+                  bookings={bookings}
+                  quadClosures={JSON.parse(globalSettings.quad_closures || '[]')}
                   globalSettings={globalSettings}
                   onSlotClick={(time, existingBooking) => handleSlotClick(null, time, 'active', null, existingBooking)}
                 />
@@ -1914,6 +2096,70 @@ export default function App() {
                     </>
                   )}
 
+                  {activeDepartment === 'quad' && (
+                    <>
+                      <div className="form-group flex-align margin-bottom-sm">
+                        <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>კვადროციკლები - ერთ სლოტზე მაქსიმალური ჯავშნები:</label>
+                        <input 
+                          type="number" 
+                          className="form-input" 
+                          min="1"
+                          value={globalSettings.quad_max_bookings_per_slot || 6}
+                          onChange={(e) => handleUpdateGlobalSetting('quad_max_bookings_per_slot', e.target.value)}
+                          style={{ width: '100px' }}
+                        />
+                      </div>
+
+                      <div className="form-group flex-align margin-bottom-sm">
+                        <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>კვადროციკლები - ჯამური კვადროების რაოდენობა სლოტზე:</label>
+                        <input 
+                          type="number" 
+                          className="form-input" 
+                          min="0"
+                          value={globalSettings.quad_max_quads_per_slot || 9}
+                          onChange={(e) => handleUpdateGlobalSetting('quad_max_quads_per_slot', e.target.value)}
+                          style={{ width: '100px' }}
+                        />
+                      </div>
+
+                      <div className="form-group flex-align margin-bottom-sm">
+                        <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>ბაგი - ჯამური ბაგების რაოდენობა სლოტზე:</label>
+                        <input 
+                          type="number" 
+                          className="form-input" 
+                          min="0"
+                          value={globalSettings.quad_max_buggies_per_slot || 1}
+                          onChange={(e) => handleUpdateGlobalSetting('quad_max_buggies_per_slot', e.target.value)}
+                          style={{ width: '100px' }}
+                        />
+                      </div>
+
+                      <div className="form-group flex-align margin-bottom-sm">
+                        <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>სამუშაო საათის დაწყება (მაგ: 10):</label>
+                        <input 
+                          type="number" 
+                          className="form-input" 
+                          min="0" max="23"
+                          value={globalSettings.quad_start_hour || 10}
+                          onChange={(e) => handleUpdateGlobalSetting('quad_start_hour', e.target.value)}
+                          style={{ width: '100px' }}
+                        />
+                      </div>
+
+                      <div className="form-group flex-align margin-bottom-sm">
+                        <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>სამუშაო საათის დასრულება (მაგ: 20):</label>
+                        <input 
+                          type="number" 
+                          className="form-input" 
+                          min="1" max="24"
+                          value={globalSettings.quad_end_hour || 20}
+                          onChange={(e) => handleUpdateGlobalSetting('quad_end_hour', e.target.value)}
+                          style={{ width: '100px' }}
+                        />
+                      </div>
+                    </>
+                  )}
+
                   <div className="form-group">
                     <label className="checkbox-container margin-bottom-sm">
                       <input 
@@ -1937,8 +2183,8 @@ export default function App() {
                   </div>
                 </div>
 
-                                {/* Operating hours table */}
-                {activeDepartment !== 'equestrian' && (
+                {/* Operating hours table */}
+                {activeDepartment === 'tennis' && (
                   <div className="settings-card glass-panel">
                     <h3>სამუშაო საათების კონტროლი</h3>
                     <p className="text-xs text-secondary margin-bottom-md">კალენდრის სამუშაო საათების განსაზღვრა</p>
@@ -1999,7 +2245,7 @@ export default function App() {
                 )}
 
                 {/* Court configurations (ADD, DELETE, MAINTENANCE) */}
-                {activeDepartment !== 'equestrian' && (
+                {activeDepartment === 'tennis' && (
                   <div className="settings-card glass-panel">
                     <h3>კორტების მართვა და რემონტი</h3>
                     <p className="text-xs text-secondary margin-bottom-md">ახალი კორტის დამატება, წაშლა ან რემონტზე დაკეტვა</p>
@@ -2063,7 +2309,7 @@ export default function App() {
                 )}
 
                 {/* Court Closures by Date */}
-                {activeDepartment !== 'equestrian' && (
+                {activeDepartment === 'tennis' && (
                   <div className="settings-card glass-panel margin-top-md">
                     <h3>კორტების ჩაკეტვა თარიღებით</h3>
                     <p className="text-xs text-secondary margin-bottom-md">ჩაკეტეთ კორტი კონკრეტულ თარიღზე ღონისძიების ან ტურნირის გამო</p>
@@ -2290,6 +2536,114 @@ export default function App() {
                                     onClick={() => {
                                       if (window.confirm('ნამდვილად გსურთ ამ ჩაკეტვის გაუქმება?')) {
                                         group.ids.forEach(id => handleDeleteEqClosure(id));
+                                      }
+                                    }}
+                                    title="გაუქმება"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Quad & Buggy Closures */}
+                {activeDepartment === 'quad' && (
+                  <div className="settings-card glass-panel margin-top-md">
+                    <h3>კვადროციკლებისა და ბაგების დაკეტვის დღეები</h3>
+                    <p className="text-xs text-secondary margin-bottom-md">კვადროციკლებისა და ბაგების ჩაკეტვა უამინდობის, ღონისძიების ან ტექ. დათვალიერების გამო</p>
+                    
+                    {/* Add Quad Closure form */}
+                    <form onSubmit={handleAddQuadClosure} className="closure-form margin-bottom-md">
+                      <div className="closure-form-top">
+                        <div className="closure-form-group closure-datepicker-group">
+                          <label className="form-label text-xs">თარიღების შუალედი (აირჩიეთ კალენდრიდან)</label>
+                          <DateRangePicker 
+                            startDate={quadClosureDateStart} 
+                            endDate={quadClosureDateEnd}
+                            onStartChange={setQuadClosureDateStart}
+                            onEndChange={setQuadClosureDateEnd}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="closure-form-bottom">
+                        <div className="closure-form-group" style={{ flex: 1 }}>
+                          <label className="form-label text-xs">მიზეზი (მაგ. უამინდობა, ღონისძიება, ტექ-რემონტი)</label>
+                          <input 
+                            type="text" 
+                            className="form-input text-sm"
+                            value={quadClosureReason}
+                            onChange={(e) => setQuadClosureReason(e.target.value)}
+                            placeholder="ჩაკეტვის მიზეზი..."
+                            required
+                          />
+                        </div>
+
+                        <div className="closure-submit-col">
+                          <button type="submit" className="btn btn-primary btn-sm flex-align" style={{ width: '100%', justifyContent: 'center' }}>
+                            <CalendarIcon size={14} className="margin-right-xs" />
+                            დაკეტვა
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+
+                    {/* Quad Closures list */}
+                    <div className="courts-edit-list">
+                      {JSON.parse(globalSettings.quad_closures || '[]').length === 0 ? (
+                        <p className="text-sm text-secondary text-center" style={{ padding: '20px 0' }}>არ არის დაგეგმილი ჩაკეტვები</p>
+                      ) : (
+                        JSON.parse(globalSettings.quad_closures || '[]')
+                          .sort((a, b) => new Date(a.date) - new Date(b.date))
+                          .reduce((groups, closure) => {
+                            const last = groups[groups.length - 1];
+                            if (
+                              last && 
+                              last.reason === closure.reason &&
+                              (new Date(closure.date) - new Date(last.endDate)) / 86400000 === 1
+                            ) {
+                              last.endDate = closure.date;
+                              last.ids.push(closure.id);
+                            } else {
+                              groups.push({
+                                reason: closure.reason,
+                                startDate: closure.date,
+                                endDate: closure.date,
+                                ids: [closure.id]
+                              });
+                            }
+                            return groups;
+                          }, [])
+                          .map((group, index) => {
+                            let dateDisplay = group.startDate;
+                            if (group.startDate !== group.endDate) {
+                              dateDisplay = `${group.startDate} - ${group.endDate}`;
+                            }
+
+                            return (
+                              <div key={`quad-group-${index}`} className="court-edit-item glass-panel" style={{ padding: '12px', borderLeft: '3px solid var(--color-warning)' }}>
+                                <div className="court-details-col" style={{ flex: 1 }}>
+                                  <div className="flex-align margin-bottom-xs">
+                                    <strong style={{ fontSize: '14px' }}>🏍️ კვადრო / ბაგი</strong>
+                                    <span className="badge badge-warning margin-left-sm" style={{ fontSize: '10px' }}>
+                                      {dateDisplay}
+                                    </span>
+                                  </div>
+                                  <span className="text-xs text-secondary">
+                                    მიზეზი: <b>{group.reason}</b>
+                                  </span>
+                                </div>
+                                <div className="court-edit-actions">
+                                  <button 
+                                    className="btn btn-xs btn-danger flex-align"
+                                    onClick={() => {
+                                      if (window.confirm('ნამდვილად გსურთ ამ ჩაკეტვის გაუქმება?')) {
+                                        group.ids.forEach(id => handleDeleteQuadClosure(id));
                                       }
                                     }}
                                     title="გაუქმება"
@@ -3064,6 +3418,10 @@ export default function App() {
           background: rgba(236, 72, 153, 0.15) !important;
           border-left-color: #ec4899 !important;
         }
+        .scheduler-grid-cell.occupied.dur-3h {
+          background: rgba(244, 63, 94, 0.18) !important;
+          border-left-color: #f43f5e !important;
+        }
 
         .booking-cell-content {
           animation: cellFadeIn 0.2s ease-out;
@@ -3376,6 +3734,7 @@ export default function App() {
 
           .sidebar-department-switcher {
             flex-direction: row;
+            flex-wrap: wrap;
             margin-bottom: 0;
             padding-bottom: 0;
             border-bottom: none;
@@ -3383,8 +3742,8 @@ export default function App() {
           }
 
           .sidebar-dep-btn {
-            padding: 10px 10px;
-            font-size: 0.7rem;
+            padding: 8px 8px;
+            font-size: 0.68rem;
           }
           
           .user-profile-widget {
