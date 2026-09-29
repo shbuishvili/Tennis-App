@@ -44,6 +44,47 @@ const DEFAULT_SETTINGS = [
   { day_type: 'holiday', open_time: '10:00:00', close_time: '18:00:00', is_active: true }
 ];
 
+const BOOKING_PAGE_SIZE = 1000;
+
+async function fetchAllBookings() {
+  const allBookings = [];
+
+  for (let from = 0; ; from += BOOKING_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .order('id', { ascending: true })
+      .range(from, from + BOOKING_PAGE_SIZE - 1);
+
+    if (error) throw error;
+
+    const page = data || [];
+    allBookings.push(...page);
+    if (page.length < BOOKING_PAGE_SIZE) break;
+  }
+
+  return allBookings;
+}
+
+async function fetchRecentBookings() {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('*')
+    .order('id', { ascending: false })
+    .limit(BOOKING_PAGE_SIZE);
+
+  if (error) throw error;
+  return data || [];
+}
+
+function mergeBookings(currentBookings, incomingBookings) {
+  const byId = new Map(currentBookings.map(booking => [booking.id, booking]));
+  incomingBookings.forEach(booking => {
+    if (booking?.id != null) byId.set(booking.id, booking);
+  });
+  return Array.from(byId.values());
+}
+
 const TennisRacketIcon = ({ size = 24, className = "" }) => (
   <svg 
     width={size} 
@@ -170,8 +211,8 @@ export default function App() {
         const { data: dbSettings } = await supabase.from('court_settings').select('*');
         setSettings(dbSettings?.length ? dbSettings : DEFAULT_SETTINGS);
 
-        const { data: dbBookings } = await supabase.from('bookings').select('*');
-        setBookings(dbBookings || []);
+        const dbBookings = await fetchAllBookings();
+        setBookings(dbBookings);
 
         const { data: dbClosures } = await supabase.from('court_closures').select('*');
         setCourtClosures(dbClosures || []);
@@ -263,6 +304,7 @@ export default function App() {
   // Real-time synchronization & polling fallback for bookings & closures
   useEffect(() => {
     let intervalId;
+    let pollCount = 0;
 
     if (isSupabaseConnected) {
       // 1. Supabase Realtime Subscription for bookings
@@ -271,9 +313,18 @@ export default function App() {
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'bookings' },
-          async () => {
-            const { data } = await supabase.from('bookings').select('*');
-            if (data) setBookings(data);
+          payload => {
+            if (payload.eventType === 'DELETE') {
+              const deletedId = payload.old?.id;
+              if (deletedId != null) {
+                setBookings(current => current.filter(booking => booking.id !== deletedId));
+              }
+              return;
+            }
+
+            if (payload.new?.id != null) {
+              setBookings(current => mergeBookings(current, [payload.new]));
+            }
           }
         )
         .subscribe();
@@ -293,8 +344,17 @@ export default function App() {
 
       // 3. Polling fallback (every 15 seconds) just in case Realtime is disabled
       intervalId = setInterval(async () => {
-        const { data: bData } = await supabase.from('bookings').select('*');
-        if (bData) setBookings(bData);
+        try {
+          pollCount += 1;
+          if (pollCount % 20 === 0) {
+            setBookings(await fetchAllBookings());
+          } else {
+            const recentBookings = await fetchRecentBookings();
+            setBookings(current => mergeBookings(current, recentBookings));
+          }
+        } catch (error) {
+          console.warn('Bookings refresh failed:', error);
+        }
         
         const { data: cData } = await supabase.from('court_closures').select('*');
         if (cData) setCourtClosures(cData);
@@ -623,9 +683,9 @@ export default function App() {
           }
         }
         
-        // Refresh bookings
-        const { data: dbBookings } = await supabase.from('bookings').select('*');
-        setBookings(dbBookings || []);
+        // Refresh the newest page; the historical pages are already in state.
+        const dbBookings = await fetchRecentBookings();
+        setBookings(current => mergeBookings(current, dbBookings));
         
         await logActivity(
           bookingData.id ? 'UPDATE_BOOKING' : 'CREATE_BOOKING',
@@ -671,9 +731,7 @@ export default function App() {
           .eq('id', bookingId);
         if (error) throw error;
 
-        // Refresh bookings
-        const { data: dbBookings } = await supabase.from('bookings').select('*');
-        setBookings(dbBookings || []);
+        setBookings(current => current.filter(booking => booking.id !== bookingId));
         if (deletedBooking) {
           await logActivity('DELETE_BOOKING', `${deletedBooking.full_name} (${new Date(deletedBooking.start_time).toLocaleString('ka-GE')})`);
         }
