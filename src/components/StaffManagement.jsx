@@ -1,6 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { UserPlus, Trash2, Key, Users, RefreshCw } from 'lucide-react';
+import { DEPARTMENTS, parseDepartmentAccess, serializeDepartmentAccess, departmentAccessLabel } from '../departments';
+
+function DepartmentCheckboxes({ selected, onChange, disabled = false }) {
+  return (
+    <fieldset className="department-checkboxes" disabled={disabled}>
+      <legend className="form-label">დეპარტამენტი და წვდომა</legend>
+      <div className="department-checkbox-list">
+        {DEPARTMENTS.map(department => (
+          <label key={department.id} className="department-checkbox-item">
+            <input type="checkbox" checked={selected.includes(department.id)}
+              onChange={() => onChange(selected.includes(department.id)
+                ? selected.filter(id => id !== department.id)
+                : [...selected, department.id])} />
+            <span>{department.label}</span>
+          </label>
+        ))}
+      </div>
+      {disabled && <small>სუპერ ადმინისტრატორს ყველა განყოფილებაზე აქვს წვდომა.</small>}
+    </fieldset>
+  );
+}
 
 export default function StaffManagement({ isSupabaseConnected, currentUser }) {
   const [users, setUsers] = useState([]);
@@ -11,7 +32,7 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState('staff');
-  const [department, setDepartment] = useState('all');
+  const [departments, setDepartments] = useState(['tennis']);
   const [createError, setCreateError] = useState('');
   const [createSuccess, setCreateSuccess] = useState('');
 
@@ -24,7 +45,7 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
   // States for editing user role/department
   const [selectedUserForEdit, setSelectedUserForEdit] = useState(null);
   const [editRole, setEditRole] = useState('staff');
-  const [editDepartment, setEditDepartment] = useState('all');
+  const [editDepartments, setEditDepartments] = useState(['tennis']);
   const [editError, setEditError] = useState('');
   const [editSuccess, setEditSuccess] = useState('');
 
@@ -67,13 +88,17 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
       setCreateError('გთხოვთ შეავსოთ ყველა ველი');
       return;
     }
+    if (departments.length === 0) {
+      setCreateError('მონიშნეთ მინიმუმ ერთი დეპარტამენტი');
+      return;
+    }
 
     try {
       const newUser = {
         username: username.trim().toLowerCase(),
         password: password.trim(),
         role: role,
-        department: department,
+        department: serializeDepartmentAccess(departments),
         full_name: fullName.trim()
       };
 
@@ -95,7 +120,7 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
       setPassword('');
       setFullName('');
       setRole('staff');
-      setDepartment('all');
+      setDepartments(['tennis']);
       fetchUsers();
     } catch (err) {
       setCreateError('მომხმარებლის შექმნისას მოხდა შეცდომა (შესაძლოა სახელი უკვე დაკავებულია)');
@@ -169,17 +194,23 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
     setEditError('');
     setEditSuccess('');
 
+    if (editRole !== 'super_admin' && editDepartments.length === 0) {
+      setEditError('მონიშნეთ მინიმუმ ერთი დეპარტამენტი');
+      return;
+    }
+    const department = editRole === 'super_admin' ? 'all' : serializeDepartmentAccess(editDepartments);
+
     try {
       if (isSupabaseConnected) {
         const { error } = await supabase
           .from('user_accounts')
-          .update({ role: editRole, department: editDepartment })
+          .update({ role: editRole, department })
           .eq('id', selectedUserForEdit.id);
         
         if (error) throw error;
       } else {
         const updatedUsers = users.map(u => 
-          u.id === selectedUserForEdit.id ? { ...u, role: editRole, department: editDepartment } : u
+          u.id === selectedUserForEdit.id ? { ...u, role: editRole, department } : u
         );
         setUsers(updatedUsers);
         localStorage.setItem('local_user_accounts', JSON.stringify(updatedUsers));
@@ -269,20 +300,7 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
               </select>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">დეპარტამენტი (წვდომა)</label>
-              <select
-                className="form-input select-role-input"
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-              >
-                <option value="all">ყველა (სრული წვდომა)</option>
-                <option value="tennis">🎾 მხოლოდ ტენისი</option>
-                <option value="equestrian">🐴 მხოლოდ საჯინიბო</option>
-                <option value="quad">🏍️ მხოლოდ კვადრო / ბაგი</option>
-                <option value="padel">🏓 მხოლოდ პადელი</option>
-              </select>
-            </div>
+            <DepartmentCheckboxes selected={departments} onChange={setDepartments} />
 
             <button type="submit" className="btn btn-primary width-100">
               ანგარიშის შექმნა
@@ -328,10 +346,7 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
                       </td>
                       <td>
                         <span className="role-tag" style={{ background: 'rgba(255,255,255,0.1)' }}>
-                          {user.department === 'tennis' ? '🎾 ტენისი' : 
-                           user.department === 'equestrian' ? '🐴 საჯინიბო' :
-                           user.department === 'quad' ? '🏍️ კვადრო' :
-                           user.department === 'padel' ? '🏓 პადელი' : '🌐 ყველა'}
+                          {departmentAccessLabel(user.department, user.role)}
                         </span>
                       </td>
                       <td>
@@ -354,7 +369,7 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
                             onClick={() => {
                               setSelectedUserForEdit(user);
                               setEditRole(user.role || 'staff');
-                              setEditDepartment(user.department || 'all');
+                              setEditDepartments(parseDepartmentAccess(user.department, user.role));
                               setEditError('');
                               setEditSuccess('');
                             }}
@@ -469,20 +484,8 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
                 </select>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">დეპარტამენტი (წვდომა)</label>
-                <select
-                  className="form-input select-role-input"
-                  value={editDepartment}
-                  onChange={(e) => setEditDepartment(e.target.value)}
-                >
-                  <option value="all">ყველა (სრული წვდომა)</option>
-                  <option value="tennis">🎾 მხოლოდ ტენისი</option>
-                  <option value="equestrian">🐴 მხოლოდ საჯინიბო</option>
-                  <option value="quad">🏍️ მხოლოდ კვადრო / ბაგი</option>
-                  <option value="padel">🏓 მხოლოდ პადელი</option>
-                </select>
-              </div>
+              <DepartmentCheckboxes selected={editRole === 'super_admin' ? DEPARTMENTS.map(department => department.id) : editDepartments}
+                onChange={setEditDepartments} disabled={editRole === 'super_admin'} />
 
               <button type="submit" className="btn btn-primary width-100 margin-top-md">
                 შენახვა
@@ -493,6 +496,30 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
       )}
 
 <style>{`
+        .department-checkboxes {
+          border: 1px solid var(--border-color);
+          border-radius: var(--radius-sm);
+          padding: 12px;
+          margin: 0 0 16px;
+        }
+        .department-checkboxes legend { padding: 0 6px; }
+        .department-checkboxes small { color: var(--text-secondary); }
+        .department-checkbox-list {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+        }
+        .department-checkbox-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          cursor: pointer;
+          font-size: 0.9rem;
+        }
+        .department-checkbox-item input { accent-color: var(--color-volt); }
+        @media (max-width: 600px) {
+          .department-checkbox-list { grid-template-columns: 1fr; }
+        }
         .staff-layout {
           display: grid;
           grid-template-columns: 1fr 2fr;

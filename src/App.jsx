@@ -30,6 +30,7 @@ import {
 import Analytics from './components/Analytics';
 import EquestrianCalendar from './components/EquestrianCalendar';
 import QuadCalendar from './components/QuadCalendar';
+import { parseDepartmentAccess } from './departments';
 
 const DEFAULT_COURTS = [
   { id: 1, name: 'კორტი 1 (Clay)', type: 'Clay', is_active: true, status: 'active' },
@@ -114,6 +115,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'calendar', 'customers', 'staff', 'settings', 'profile', 'analytics'
   const [activeDepartment, setActiveDepartment] = useState('tennis');
+  const allowedDepartments = parseDepartmentAccess(currentUser?.department, currentUser?.role);
   const [courts, setCourts] = useState([]);
   const departmentCourts = courts.filter(c => courtDepartment(c) === (activeDepartment === 'padel' ? 'padel' : 'tennis'));
   const [bookings, setBookings] = useState([]);
@@ -197,17 +199,17 @@ export default function App() {
       } else {
         setActiveTab('dashboard');
       }
-      if (parsedUser.department === 'equestrian') {
-        setActiveDepartment('equestrian');
-      } else if (parsedUser.department === 'quad') {
-        setActiveDepartment('quad');
-      } else if (parsedUser.department === 'padel') {
-        setActiveDepartment('padel');
-      }
+      setActiveDepartment(parseDepartmentAccess(parsedUser.department, parsedUser.role)[0] || 'tennis');
     } else {
       setActiveTab('login');
     }
   }, []); // Run only once
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const allowed = parseDepartmentAccess(currentUser.department, currentUser.role);
+    if (!allowed.includes(activeDepartment)) setActiveDepartment(allowed[0] || 'tennis');
+  }, [currentUser, activeDepartment]);
 
   const canSeeAnalytics = currentUser?.role === 'super_admin' || 
     (currentUser?.role === 'manager' && globalSettings.allow_manager_analytics === 'true') ||
@@ -388,6 +390,33 @@ export default function App() {
     }
   }, [isSupabaseConnected]);
 
+  // Pick up department changes made by an administrator in another session.
+  useEffect(() => {
+    if (!isSupabaseConnected || !currentUser?.id) return;
+    let active = true;
+    const refreshAccess = async () => {
+      const { data, error } = await supabase.from('user_accounts')
+        .select('id, role, department, full_name')
+        .eq('id', currentUser.id).maybeSingle();
+      if (!active || error || !data) return;
+      setCurrentUser(previous => {
+        if (!previous || previous.id !== data.id) return previous;
+        if (previous.role === data.role && previous.department === data.department && previous.full_name === data.full_name) return previous;
+        const updated = { ...previous, ...data };
+        localStorage.setItem('tennis_app_user', JSON.stringify(updated));
+        return updated;
+      });
+    };
+    refreshAccess();
+    const interval = setInterval(refreshAccess, 30000);
+    window.addEventListener('focus', refreshAccess);
+    return () => {
+      active = false;
+      clearInterval(interval);
+      window.removeEventListener('focus', refreshAccess);
+    };
+  }, [isSupabaseConnected, currentUser?.id]);
+
   // Update mobile court view selection automatically if courts list changes
   useEffect(() => {
     if (departmentCourts.length > 0 && !departmentCourts.some(c => c.id === selectedCourtMobile)) {
@@ -399,7 +428,7 @@ export default function App() {
   const handleLoginSuccess = (user) => {
     setCurrentUser(user);
     localStorage.setItem('tennis_app_user', JSON.stringify(user));
-    setActiveDepartment(['tennis', 'equestrian', 'quad', 'padel'].includes(user.department) ? user.department : 'tennis');
+    setActiveDepartment(parseDepartmentAccess(user.department, user.role)[0] || 'tennis');
     if (user.role === 'staff') {
       setActiveTab('calendar');
     } else {
@@ -1472,32 +1501,32 @@ export default function App() {
           </div>
           
           {/* Global Department Switcher in Sidebar */}
-          {(currentUser?.department === 'all' || !currentUser?.department || currentUser?.role !== 'staff') && (
+          {allowedDepartments.length > 1 && (
             <div className="sidebar-department-switcher">
-              <button 
+              {allowedDepartments.includes('tennis') && <button 
                 className={`sidebar-dep-btn ${activeDepartment === 'tennis' ? 'active' : ''}`}
                 onClick={() => setActiveDepartment('tennis')}
               >
                 🎾 ტენისი
-              </button>
-              <button 
+              </button>}
+              {allowedDepartments.includes('equestrian') && <button 
                 className={`sidebar-dep-btn ${activeDepartment === 'equestrian' ? 'active' : ''}`}
                 onClick={() => setActiveDepartment('equestrian')}
               >
                 🐴 საჯინიბო
-              </button>
-              <button 
+              </button>}
+              {allowedDepartments.includes('quad') && <button 
                 className={`sidebar-dep-btn ${activeDepartment === 'quad' ? 'active' : ''}`}
                 onClick={() => setActiveDepartment('quad')}
               >
                 🏍️ კვადრო / ბაგი
-              </button>
-              <button
+              </button>}
+              {allowedDepartments.includes('padel') && <button
                 className={`sidebar-dep-btn ${activeDepartment === 'padel' ? 'active' : ''}`}
                 onClick={() => setActiveDepartment('padel')}
               >
                 🏓 პადელი
-              </button>
+              </button>}
             </div>
           )}
         </div>
