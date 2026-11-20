@@ -23,7 +23,8 @@ export default function Analytics({ bookings, courts, activityLogs, activeDepart
       const bType = b.activity_type || 'tennis';
       const isCorrectDepartment = (activeDepartment === 'equestrian' && bType === 'equestrian') ||
                                   (activeDepartment === 'quad' && bType === 'quad') ||
-                                  (activeDepartment === 'tennis' && bType !== 'equestrian' && bType !== 'quad');
+                                  (activeDepartment === 'padel' && bType === 'padel') ||
+                                  (activeDepartment === 'tennis' && bType === 'tennis');
       return bStart >= start && bStart <= end && isCorrectDepartment;
     });
   }, [bookings, startDate, endDate, activeDepartment]);
@@ -120,7 +121,7 @@ export default function Analytics({ bookings, courts, activityLogs, activeDepart
           <h3 className="stat-value" style={{ fontSize: '2rem', color: '#fff' }}>{stats.totalBookings}</h3>
         </div>
 
-        {activeDepartment === 'tennis' ? (
+        {(activeDepartment === 'tennis' || activeDepartment === 'padel') ? (
           <div className="stat-card glass-panel" style={{ padding: '20px', borderRadius: '16px' }}>
             <div className="stat-icon-wrapper" style={{ background: 'rgba(255, 255, 255, 0.1)', color: '#fff', padding: '12px', borderRadius: '50%', display: 'inline-flex', marginBottom: '12px' }}>
               <Activity size={24} />
@@ -166,7 +167,7 @@ export default function Analytics({ bookings, courts, activityLogs, activeDepart
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
-        {activeDepartment === 'tennis' && (
+        {(activeDepartment === 'tennis' || activeDepartment === 'padel') && (
           <div className="glass-panel" style={{ padding: '24px', borderRadius: '16px' }}>
             <h3 style={{ color: '#fff', marginBottom: '16px', fontSize: '1.1rem' }}>დატვირთულობა კორტების მიხედვით</h3>
             <div className="court-stats-list">

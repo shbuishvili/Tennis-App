@@ -2,10 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { UserPlus, Trash2, Key, Users, RefreshCw } from 'lucide-react';
 
-const INITIAL_STAFF = [
-  { username: 'staff', password: 'staff123', role: 'staff', full_name: 'მორიგე ოპერატორი' }
-];
-
 export default function StaffManagement({ isSupabaseConnected, currentUser }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -48,14 +44,7 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
         if (localUsers) {
           setUsers(JSON.parse(localUsers));
         } else {
-          // Add default demo accounts
-          const defaultList = [
-            { id: 1, username: 'admin', password: 'admin123', role: 'super_admin', full_name: 'სუპერ ადმინისტრატორი', department: 'all' },
-            { id: 2, username: 'manager', password: 'manager123', role: 'manager', full_name: 'მთავარი მენეჯერი', department: 'all' },
-            { id: 3, username: 'staff', password: 'staff123', role: 'staff', full_name: 'მორიგე ოპერატორი', department: 'tennis' }
-          ];
-          setUsers(defaultList);
-          localStorage.setItem('local_user_accounts', JSON.stringify(defaultList));
+          setUsers([]);
         }
       }
     } catch (err) {
@@ -291,6 +280,7 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
                 <option value="tennis">🎾 მხოლოდ ტენისი</option>
                 <option value="equestrian">🐴 მხოლოდ საჯინიბო</option>
                 <option value="quad">🏍️ მხოლოდ კვადრო / ბაგი</option>
+                <option value="padel">🏓 მხოლოდ პადელი</option>
               </select>
             </div>
 
@@ -340,7 +330,8 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
                         <span className="role-tag" style={{ background: 'rgba(255,255,255,0.1)' }}>
                           {user.department === 'tennis' ? '🎾 ტენისი' : 
                            user.department === 'equestrian' ? '🐴 საჯინიბო' :
-                           user.department === 'quad' ? '🏍️ კვადრო' : '🌐 ყველა'}
+                           user.department === 'quad' ? '🏍️ კვადრო' :
+                           user.department === 'padel' ? '🏓 პადელი' : '🌐 ყველა'}
                         </span>
                       </td>
                       <td>
@@ -489,6 +480,7 @@ export default function StaffManagement({ isSupabaseConnected, currentUser }) {
                   <option value="tennis">🎾 მხოლოდ ტენისი</option>
                   <option value="equestrian">🐴 მხოლოდ საჯინიბო</option>
                   <option value="quad">🏍️ მხოლოდ კვადრო / ბაგი</option>
+                  <option value="padel">🏓 მხოლოდ პადელი</option>
                 </select>
               </div>
 

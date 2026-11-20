@@ -35,8 +35,11 @@ const DEFAULT_COURTS = [
   { id: 1, name: 'კორტი 1 (Clay)', type: 'Clay', is_active: true, status: 'active' },
   { id: 2, name: 'კორტი 2 (Hard)', type: 'Hard', is_active: true, status: 'active' },
   { id: 3, name: 'კორტი 3 (Clay)', type: 'Clay', is_active: true, status: 'active' },
-  { id: 4, name: 'კორტი 4 (Hard)', type: 'Hard', is_active: true, status: 'active' }
+  { id: 4, name: 'კორტი 4 (Hard)', type: 'Hard', is_active: true, status: 'active' },
+  { id: 5, name: 'პადელის კორტი', type: 'Padel', department: 'padel', is_active: true, status: 'active' }
 ];
+
+const courtDepartment = court => court.department || 'tennis';
 
 const DEFAULT_SETTINGS = [
   { day_type: 'weekday', open_time: '08:00:00', close_time: '22:00:00', is_active: true },
@@ -110,12 +113,18 @@ const TennisRacketIcon = ({ size = 24, className = "" }) => (
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'calendar', 'customers', 'staff', 'settings', 'profile', 'analytics'
-  const [activeDepartment, setActiveDepartment] = useState('tennis'); // 'tennis', 'equestrian', or 'quad'
+  const [activeDepartment, setActiveDepartment] = useState('tennis');
   const [courts, setCourts] = useState([]);
+  const departmentCourts = courts.filter(c => courtDepartment(c) === (activeDepartment === 'padel' ? 'padel' : 'tennis'));
   const [bookings, setBookings] = useState([]);
   const [settings, setSettings] = useState([]);
   const [globalSettings, setGlobalSettings] = useState({ 
     total_rackets: '20',
+    padel_total_rackets: '8',
+    padel_weekday_open: '08:00',
+    padel_weekday_close: '22:00',
+    padel_weekend_open: '09:00',
+    padel_weekend_close: '23:00',
     allow_manager_analytics: 'true',
     allow_staff_analytics: 'false',
     eq_max_bookings_per_slot: '2',
@@ -154,6 +163,11 @@ export default function App() {
   const [closureDateEnd, setClosureDateEnd] = useState('');
   const [closureReason, setClosureReason] = useState('');
 
+  useEffect(() => {
+    setClosureCourtId('');
+    setNewCourtName('');
+  }, [activeDepartment]);
+
   // Equestrian closures creation states
   const [eqClosureDateStart, setEqClosureDateStart] = useState('');
   const [eqClosureDateEnd, setEqClosureDateEnd] = useState('');
@@ -187,6 +201,8 @@ export default function App() {
         setActiveDepartment('equestrian');
       } else if (parsedUser.department === 'quad') {
         setActiveDepartment('quad');
+      } else if (parsedUser.department === 'padel') {
+        setActiveDepartment('padel');
       }
     } else {
       setActiveTab('login');
@@ -219,14 +235,7 @@ export default function App() {
 
         const { data: dbGlobal } = await supabase.from('global_settings').select('*');
         if (dbGlobal) {
-          const gSettings = { 
-            total_rackets: '20',
-            allow_manager_analytics: 'true',
-            allow_staff_analytics: 'false',
-            eq_max_bookings_per_slot: '2',
-            eq_max_horses_per_slot: '6',
-            eq_max_ponies_per_slot: '3'
-          };
+          const gSettings = { ...globalSettings };
           dbGlobal.forEach(s => {
             gSettings[s.key] = s.value;
           });
@@ -249,7 +258,14 @@ export default function App() {
         const localBookings = localStorage.getItem('bookings');
         const localClosures = localStorage.getItem('court_closures');
 
-        if (localCourts) setCourts(JSON.parse(localCourts));
+        if (localCourts) {
+          const parsedCourts = JSON.parse(localCourts);
+          if (!parsedCourts.some(c => courtDepartment(c) === 'padel')) {
+            parsedCourts.push({ ...DEFAULT_COURTS[4], id: Math.max(0, ...parsedCourts.map(c => Number(c.id) || 0)) + 1 });
+            localStorage.setItem('courts', JSON.stringify(parsedCourts));
+          }
+          setCourts(parsedCourts);
+        }
         else {
           setCourts(DEFAULT_COURTS);
           localStorage.setItem('courts', JSON.stringify(DEFAULT_COURTS));
@@ -270,14 +286,7 @@ export default function App() {
         const localGlobal = localStorage.getItem('global_settings');
         if (localGlobal) setGlobalSettings(JSON.parse(localGlobal));
         else {
-          const defGlobal = { 
-            total_rackets: '20',
-            allow_manager_analytics: 'true',
-            allow_staff_analytics: 'false',
-            eq_max_bookings_per_slot: '2',
-            eq_max_horses_per_slot: '6',
-            eq_max_ponies_per_slot: '3'
-          };
+          const defGlobal = { ...globalSettings };
           setGlobalSettings(defGlobal);
           localStorage.setItem('global_settings', JSON.stringify(defGlobal));
         }
@@ -381,15 +390,16 @@ export default function App() {
 
   // Update mobile court view selection automatically if courts list changes
   useEffect(() => {
-    if (courts.length > 0 && !courts.some(c => c.id === selectedCourtMobile)) {
-      setSelectedCourtMobile(courts[0].id);
+    if (departmentCourts.length > 0 && !departmentCourts.some(c => c.id === selectedCourtMobile)) {
+      setSelectedCourtMobile(departmentCourts[0].id);
     }
-  }, [courts]);
+  }, [courts, activeDepartment]);
 
   // Auth helper
   const handleLoginSuccess = (user) => {
     setCurrentUser(user);
     localStorage.setItem('tennis_app_user', JSON.stringify(user));
+    setActiveDepartment(['tennis', 'equestrian', 'quad', 'padel'].includes(user.department) ? user.department : 'tennis');
     if (user.role === 'staff') {
       setActiveTab('calendar');
     } else {
@@ -450,12 +460,12 @@ export default function App() {
 
     // Court closure / maintenance check (TENNIS ONLY)
     let court = null;
-    if (bookingData.activity_type !== 'equestrian' && bookingData.activity_type !== 'quad') {
+    if (bookingData.activity_type === 'tennis' || bookingData.activity_type === 'padel') {
       court = courts.find(c => c.id === bookingData.court_id);
       const bookingDate = new Date(bookingData.start_time);
       const closure = getCourtClosureForDate(bookingData.court_id, bookingDate);
 
-      if (court?.status === 'maintenance' || closure) {
+      if (!court || courtDepartment(court) !== bookingData.activity_type || court.status === 'maintenance' || closure) {
         alert(`შეცდომა: კორტი დაკეტილია (${closure ? closure.reason : 'სარემონტო სამუშაოების გამო'}) არჩეულ დღეს!`);
         setLoading(false);
         return;
@@ -463,7 +473,7 @@ export default function App() {
     }
 
     // Overlap check (TENNIS ONLY)
-    if (bookingData.activity_type !== 'equestrian' && bookingData.activity_type !== 'quad') {
+    if (bookingData.activity_type === 'tennis' || bookingData.activity_type === 'padel') {
       const newStart = new Date(bookingData.start_time).getTime();
       const newEnd = new Date(bookingData.end_time).getTime();
       
@@ -486,10 +496,25 @@ export default function App() {
         return;
       }
 
+      const localStart = new Date(newStart + 4 * 3600000);
+      const dayType = [0, 6].includes(localStart.getUTCDay()) ? 'weekend' : 'weekday';
+      const hours = bookingData.activity_type === 'padel'
+        ? { open: globalSettings[`padel_${dayType}_open`] || (dayType === 'weekend' ? '09:00' : '08:00'), close: globalSettings[`padel_${dayType}_close`] || (dayType === 'weekend' ? '23:00' : '22:00') }
+        : getOperatingHours(localStart, 'tennis');
+      const localEnd = new Date(newEnd + 4 * 3600000);
+      const toMinutes = time => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+      const startMinutes = localStart.getUTCHours() * 60 + localStart.getUTCMinutes();
+      const endMinutes = localEnd.getUTCHours() * 60 + localEnd.getUTCMinutes();
+      if (localStart.getUTCDate() !== localEnd.getUTCDate() || startMinutes < toMinutes(hours.open) || endMinutes > toMinutes(hours.close)) {
+        alert('ჯავშანი უნდა მოთავსდეს ამ განყოფილების სამუშაო საათებში.');
+        setLoading(false);
+        return;
+      }
+
       // Rackets Inventory Check
       if (bookingData.rackets_status === 'rented') {
         const requestedRackets = bookingData.rackets_count || 2;
-        const totalAvailableRackets = parseInt(globalSettings.total_rackets || '20', 10);
+        const totalAvailableRackets = parseInt(bookingData.activity_type === 'padel' ? (globalSettings.padel_total_rackets || '8') : (globalSettings.total_rackets || '20'), 10);
         
         // We need to check every 30-min interval from newStart to newEnd
         let inventoryExceeded = false;
@@ -498,7 +523,7 @@ export default function App() {
           let rentedAtThisTime = 0;
           bookings.forEach(b => {
             if (b.is_blocked || (bookingData.id && b.id === bookingData.id)) return;
-            if (b.rackets_status === 'rented') {
+            if ((b.activity_type || 'tennis') === bookingData.activity_type && b.rackets_status === 'rented') {
               const bStart = new Date(b.start_time).getTime();
               const bEnd = new Date(b.end_time).getTime();
               if (time >= bStart && time < bEnd) {
@@ -805,7 +830,8 @@ export default function App() {
     try {
       const newCourt = {
         name: newCourtName.trim(),
-        type: newCourtType,
+        type: activeDepartment === 'padel' ? 'Padel' : newCourtType,
+        department: activeDepartment === 'padel' ? 'padel' : 'tennis',
         is_active: true,
         status: 'active'
       };
@@ -835,7 +861,7 @@ export default function App() {
 
   // Delete a court
   const handleDeleteCourt = async (courtId, courtName) => {
-    if (courts.length <= 1) {
+    if (departmentCourts.length <= 1) {
       alert('მინიმუმ 1 კორტი მაინც უნდა დარჩეს ბაზაში!');
       return;
     }
@@ -899,6 +925,10 @@ export default function App() {
   const handleAddClosure = async (e) => {
     e.preventDefault();
     if (!closureCourtId || !closureDateStart || !closureDateEnd || !closureReason.trim()) return;
+    if (!departmentCourts.length || (closureCourtId !== 'all' && !departmentCourts.some(c => c.id === Number(closureCourtId)))) {
+      alert('აირჩიეთ ამ განყოფილების კორტი');
+      return;
+    }
 
     const start = new Date(closureDateStart);
     const end = new Date(closureDateEnd);
@@ -918,11 +948,12 @@ export default function App() {
     setLoading(true);
     try {
       if (isSupabaseConnected) {
-        const rows = datesToClose.map(d => ({
-          court_id: parseInt(closureCourtId),
+        const targetIds = closureCourtId === 'all' ? departmentCourts.map(c => c.id) : [Number(closureCourtId)];
+        const rows = targetIds.flatMap(courtId => datesToClose.map(d => ({
+          court_id: courtId,
           closure_date: d,
           reason: closureReason.trim()
-        }));
+        })));
         // upsert to silently skip duplicates
         const { error } = await supabase
           .from('court_closures')
@@ -935,14 +966,15 @@ export default function App() {
         const existingKeys = new Set(
           courtClosures.map(c => `${c.court_id}_${c.closure_date}`)
         );
-        const newRecords = datesToClose
-          .filter(d => !existingKeys.has(`${closureCourtId}_${d}`))
+        const targetIds = closureCourtId === 'all' ? departmentCourts.map(c => c.id) : [Number(closureCourtId)];
+        const newRecords = targetIds.flatMap(courtId => datesToClose
+          .filter(d => !existingKeys.has(`${courtId}_${d}`))
           .map(d => ({
             id: Date.now() + Math.random(),
-            court_id: parseInt(closureCourtId),
+            court_id: courtId,
             closure_date: d,
             reason: closureReason.trim()
-          }));
+          })));
         const updatedClosures = [...courtClosures, ...newRecords];
         setCourtClosures(updatedClosures);
         localStorage.setItem('court_closures', JSON.stringify(updatedClosures));
@@ -1158,9 +1190,13 @@ export default function App() {
   };
 
   // Helper: determine operating hours for a selected date
-  const getOperatingHours = (date) => {
+  const getOperatingHours = (date, department = activeDepartment) => {
     const isWeekendVal = date.getDay() === 0 || date.getDay() === 6; // Sunday=0, Saturday=6
     const type = isWeekendVal ? 'weekend' : 'weekday';
+    if (department === 'padel') return {
+      open: globalSettings[`padel_${type}_open`] || (type === 'weekend' ? '09:00' : '08:00'),
+      close: globalSettings[`padel_${type}_close`] || (type === 'weekend' ? '23:00' : '22:00')
+    };
     const daySetting = settings.find(s => s.day_type === type);
     
     return {
@@ -1201,7 +1237,8 @@ export default function App() {
       const bType = b.activity_type || 'tennis';
       const isCorrectDepartment = (activeDepartment === 'equestrian' && bType === 'equestrian') ||
                                   (activeDepartment === 'quad' && bType === 'quad') ||
-                                  (activeDepartment === 'tennis' && bType !== 'equestrian' && bType !== 'quad');
+                                  (activeDepartment === 'padel' && bType === 'padel') ||
+                                  (activeDepartment === 'tennis' && bType === 'tennis');
       return start.toDateString() === todayStr && isCorrectDepartment;
     });
 
@@ -1236,7 +1273,7 @@ export default function App() {
     // Court occupancy
     const hours = getOperatingHours(selectedDate);
     const slots = generateTimeSlots(hours.open, hours.close);
-    const activeCourts = courts.filter(c => c.status !== 'maintenance' && !getCourtClosureForDate(c.id, selectedDate));
+    const activeCourts = departmentCourts.filter(c => c.status !== 'maintenance' && !getCourtClosureForDate(c.id, selectedDate));
     const totalSlotsPossible = slots.length * activeCourts.length;
     
     let occupiedSlotsCount = 0;
@@ -1364,6 +1401,7 @@ export default function App() {
           tennisCount: 0,
           equestrianCount: 0,
           quadCount: 0,
+          padelCount: 0,
           racketsPrefs: { included: 0, rented: 0 },
           horsesCount: 0,
           poniesCount: 0,
@@ -1378,6 +1416,8 @@ export default function App() {
         customersMap[key].tennisCount++;
         const status = b.rackets_status === 'excluded' ? 'rented' : (b.rackets_status || 'included');
         customersMap[key].racketsPrefs[status] = (customersMap[key].racketsPrefs[status] || 0) + 1;
+      } else if (dept === 'padel') {
+        customersMap[key].padelCount++;
       } else if (dept === 'equestrian') {
         customersMap[key].equestrianCount++;
         customersMap[key].horsesCount += (b.horses_count || 0);
@@ -1451,6 +1491,12 @@ export default function App() {
                 onClick={() => setActiveDepartment('quad')}
               >
                 🏍️ კვადრო / ბაგი
+              </button>
+              <button
+                className={`sidebar-dep-btn ${activeDepartment === 'padel' ? 'active' : ''}`}
+                onClick={() => setActiveDepartment('padel')}
+              >
+                🏓 პადელი
               </button>
             </div>
           )}
@@ -1558,6 +1604,7 @@ export default function App() {
               {activeTab === 'calendar' && activeDepartment === 'tennis' && 'კორტების განრიგი'}
               {activeTab === 'calendar' && activeDepartment === 'equestrian' && 'საჯინიბოს განრიგი'}
               {activeTab === 'calendar' && activeDepartment === 'quad' && 'კვადროციკლების განრიგი'}
+              {activeTab === 'calendar' && activeDepartment === 'padel' && 'პადელის კორტების განრიგი'}
               {activeTab === 'customers' && 'სტუმრების აღრიცხვა'}
               {activeTab === 'staff' && 'თანამშრომელთა მართვა'}
               {activeTab === 'settings' && 'კორტების პარამეტრები'}
@@ -1612,8 +1659,8 @@ export default function App() {
                 const slotTime = `${String(ge.getUTCHours()).padStart(2,'0')}:${String(mins).padStart(2,'0')}`;
 
                 setSelectedSlot({ 
-                  courtId: (activeDepartment === 'equestrian' || activeDepartment === 'quad') ? null : (courts[0]?.id || 1), 
-                  courtName: activeDepartment === 'equestrian' ? 'საჯინიბო' : (activeDepartment === 'quad' ? 'კვადრო' : (courts[0]?.name || 'კორტი 1')),
+                  courtId: (activeDepartment === 'equestrian' || activeDepartment === 'quad') ? null : (departmentCourts[0]?.id || null), 
+                  courtName: activeDepartment === 'equestrian' ? 'საჯინიბო' : (activeDepartment === 'quad' ? 'კვადრო' : (departmentCourts[0]?.name || 'კორტი')),
                   time: null,
                   slotDate,
                   slotTime
@@ -1654,7 +1701,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {activeDepartment === 'tennis' ? (
+                {(activeDepartment === 'tennis' || activeDepartment === 'padel') ? (
                   <>
                     <div className="stat-card glass-panel">
                       <div className="stat-icon-wrapper volt">
@@ -1722,14 +1769,14 @@ export default function App() {
                   </>
                 )}
 
-                {activeDepartment === 'tennis' && (
+                {(activeDepartment === 'tennis' || activeDepartment === 'padel') && (
                   <div className="stat-card glass-panel">
                     <div className="stat-icon-wrapper warning">
                       <ShieldAlert size={20} />
                     </div>
                     <div className="stat-info">
                       <span className="stat-label">აქტიური კორტები</span>
-                      <span className="stat-value">{stats.activeCourtsCount} / {courts.length}</span>
+                      <span className="stat-value">{stats.activeCourtsCount} / {departmentCourts.length}</span>
                     </div>
                   </div>
                 )}
@@ -1738,7 +1785,7 @@ export default function App() {
               {/* Main Dashboard Section */}
               <div className="dashboard-main-row">
                 {/* Rackets inventory pie chart / circular progress (Slide 8 style) */}
-                {activeDepartment === 'tennis' && (
+                {(activeDepartment === 'tennis' || activeDepartment === 'padel') && (
                   <div className="dashboard-card glass-panel card-rackets-inventory">
                     <h3>ჩოგნების ინვენტარის აღრიცხვა</h3>
                     <p className="text-xs text-secondary margin-bottom-md">დღიური მოთხოვნის დაქირავების პროცენტული განაწილება</p>
@@ -1886,13 +1933,13 @@ export default function App() {
                 <>
               {/* Mobile Court Selector Tabs (Slide 3/10) */}
               <div className="mobile-court-tabs">
-                {courts.map(court => {
+                {departmentCourts.map(court => {
                   const closure = getCourtClosureForDate(court.id, selectedDate);
                   const isClosed = court.status === 'maintenance' || closure;
                   return (
                     <button
                       key={court.id}
-                      className={`mobile-court-tab-btn ${court.type === 'Clay' ? 'clay' : 'hard'} ${isClosed ? 'maintenance-tab' : ''} ${selectedCourtMobile === court.id ? 'active' : ''}`}
+                      className={`mobile-court-tab-btn ${court.type === 'Padel' ? 'padel' : (court.type === 'Clay' ? 'clay' : 'hard')} ${isClosed ? 'maintenance-tab' : ''} ${selectedCourtMobile === court.id ? 'active' : ''}`}
                       onClick={() => setSelectedCourtMobile(court.id)}
                     >
                       {isClosed ? `🛠️ ${court.name}` : court.name}
@@ -1907,17 +1954,17 @@ export default function App() {
                   <div className="scheduler-time-header">დრო</div>
                   
                   {/* Desktop columns list (dynamic court count side-by-side) */}
-                  <div className="scheduler-courts-header-row" style={{ gridTemplateColumns: `repeat(${courts.length}, 1fr)` }}>
-                    {courts.map(court => {
+                  <div className="scheduler-courts-header-row" style={{ gridTemplateColumns: `repeat(${departmentCourts.length}, 1fr)` }}>
+                    {departmentCourts.map(court => {
                       const closure = getCourtClosureForDate(court.id, selectedDate);
                       const isClosed = court.status === 'maintenance' || closure;
                       return (
                         <div 
                           key={court.id} 
-                          className={`scheduler-court-column-header court-header-lines ${court.type === 'Clay' ? 'clay' : 'hard'} ${isClosed ? 'in-maintenance-header' : ''} ${selectedCourtMobile === court.id ? 'mobile-visible' : 'mobile-hidden'}`}
+                          className={`scheduler-court-column-header court-header-lines ${court.type === 'Padel' ? 'padel' : (court.type === 'Clay' ? 'clay' : 'hard')} ${isClosed ? 'in-maintenance-header' : ''} ${selectedCourtMobile === court.id ? 'mobile-visible' : 'mobile-hidden'}`}
                         >
                           <div className="court-type-indicator">
-                            {isClosed ? `🛠️ ${closure ? closure.reason : 'რემონტი'}` : (court.type === 'Clay' ? '🧱 Clay' : '🔵 Hard')}
+                            {isClosed ? `🛠️ ${closure ? closure.reason : 'რემონტი'}` : (court.type === 'Padel' ? '🏓 Padel' : (court.type === 'Clay' ? '🧱 Clay' : '🔵 Hard'))}
                           </div>
                           <h4>{court.name}</h4>
                         </div>
@@ -1931,8 +1978,8 @@ export default function App() {
                     <div key={time} className="scheduler-grid-row">
                       <div className="scheduler-row-time">{time}</div>
 
-                      <div className="scheduler-row-cells" style={{ gridTemplateColumns: `repeat(${courts.length}, 1fr)` }}>
-                        {courts.map(court => {
+                      <div className="scheduler-row-cells" style={{ gridTemplateColumns: `repeat(${departmentCourts.length}, 1fr)` }}>
+                        {departmentCourts.map(court => {
                           const isMobileActive = selectedCourtMobile === court.id;
                           const closure = getCourtClosureForDate(court.id, selectedDate);
                           
@@ -1981,7 +2028,7 @@ export default function App() {
                             <div 
                               key={`${court.id}_${time}`} 
                               onClick={() => handleSlotClick(court.id, time, court.status, closure)}
-                              className={`scheduler-grid-cell ${court.type === 'Clay' ? 'cell-clay' : 'cell-hard'} ${booking ? `occupied ${colorClass}` : 'empty'} ${booking?.is_blocked ? 'blocked' : ''} ${isMobileActive ? 'mobile-visible' : 'mobile-hidden'}`}
+                              className={`scheduler-grid-cell ${court.type === 'Padel' ? 'cell-padel' : (court.type === 'Clay' ? 'cell-clay' : 'cell-hard')} ${booking ? `occupied ${colorClass}` : 'empty'} ${booking?.is_blocked ? 'blocked' : ''} ${isMobileActive ? 'mobile-visible' : 'mobile-hidden'}`}
                             >
                               {booking ? (
                                 isStartOfBooking && (
@@ -2105,6 +2152,10 @@ export default function App() {
                       >
                         🏍️ კვადრო / ბაგი
                       </button>
+                      <button type="button" onClick={() => setCustomerDeptFilter('padel')}
+                        style={{ background: customerDeptFilter === 'padel' ? '#0d9488' : 'transparent', color: customerDeptFilter === 'padel' ? '#fff' : 'var(--text-secondary)', border: 'none', borderRadius: '16px', padding: '4px 12px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>
+                        🏓 პადელი
+                      </button>
                     </div>
                   </div>
                   
@@ -2156,6 +2207,9 @@ export default function App() {
                                   {c.tennisCount > 0 && (
                                     <span className="badge badge-volt">🎾 {c.tennisCount} ჩოგბურთი</span>
                                   )}
+                                  {c.padelCount > 0 && (
+                                    <span className="badge" style={{ background: 'rgba(13, 148, 136, 0.2)', color: '#5eead4' }}>🏓 {c.padelCount} პადელი</span>
+                                  )}
                                   {c.equestrianCount > 0 && (
                                     <span className="badge" style={{ background: 'rgba(139, 90, 43, 0.2)', color: '#f59e0b', border: '1px solid rgba(139, 90, 43, 0.4)' }}>
                                       🐴 {c.equestrianCount} საჯინიბო
@@ -2173,6 +2227,7 @@ export default function App() {
                                   {c.tennisCount > 0 && (
                                     <span>🎾 ჩოგანი: {c.racketsPrefs.included || 0} თავისი / {c.racketsPrefs.rented || 0} ნაქირ.</span>
                                   )}
+                                  {c.padelCount > 0 && <span>🏓 პადელის ჯავშანი: {c.padelCount}</span>}
                                   {c.equestrianCount > 0 && (
                                     <span>🐴 ცხენი: {c.horsesCount}, პონი: {c.poniesCount}</span>
                                   )}
@@ -2223,6 +2278,14 @@ export default function App() {
                         onChange={(e) => handleUpdateGlobalSetting('total_rackets', e.target.value)}
                         style={{ width: '100px' }}
                       />
+                    </div>
+                  )}
+                  {activeDepartment === 'padel' && (
+                    <div className="form-group flex-align margin-bottom-sm">
+                      <label className="form-label margin-right-md" style={{ marginBottom: 0 }}>პადელის ჩოგნების რაოდენობა:</label>
+                      <input type="number" min="0" className="form-input" style={{ width: '100px' }}
+                        value={globalSettings.padel_total_rackets ?? '8'}
+                        onChange={e => handleUpdateGlobalSetting('padel_total_rackets', e.target.value)} />
                     </div>
                   )}
                   
@@ -2378,6 +2441,28 @@ export default function App() {
                 </div>
 
                 {/* Operating hours table */}
+                {activeDepartment === 'padel' && (
+                  <div className="settings-card glass-panel">
+                    <h3>პადელის სამუშაო საათები</h3>
+                    <div className="settings-table-wrapper">
+                      <table className="settings-table">
+                        <thead><tr><th>დღეები</th><th>გახსნა</th><th>დაკეტვა</th></tr></thead>
+                        <tbody>
+                          {['weekday', 'weekend'].map(day => (
+                            <tr key={day}>
+                              <td><strong>{day === 'weekday' ? 'ორშაბათი–პარასკევი' : 'შაბათი–კვირა'}</strong></td>
+                              {['open', 'close'].map(bound => (
+                                <td key={bound}><input type="time" className="form-input time-input-field"
+                                  value={globalSettings[`padel_${day}_${bound}`] || (bound === 'open' ? (day === 'weekday' ? '08:00' : '09:00') : (day === 'weekday' ? '22:00' : '23:00'))}
+                                  onChange={e => handleUpdateGlobalSetting(`padel_${day}_${bound}`, e.target.value)} /></td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
                 {activeDepartment === 'tennis' && (
                   <div className="settings-card glass-panel">
                     <h3>სამუშაო საათების კონტროლი</h3>
@@ -2439,7 +2524,7 @@ export default function App() {
                 )}
 
                 {/* Court configurations (ADD, DELETE, MAINTENANCE) */}
-                {activeDepartment === 'tennis' && (
+                  {(activeDepartment === 'tennis' || activeDepartment === 'padel') && (
                   <div className="settings-card glass-panel">
                     <h3>კორტების მართვა და რემონტი</h3>
                     <p className="text-xs text-secondary margin-bottom-md">ახალი კორტის დამატება, წაშლა ან რემონტზე დაკეტვა</p>
@@ -2454,14 +2539,14 @@ export default function App() {
                         placeholder="კორტის სახელი (მაგ. კორტი 5)"
                         required
                       />
-                      <select
+                      {activeDepartment === 'tennis' && <select
                         className="form-input select-court-type text-sm"
                         value={newCourtType}
                         onChange={(e) => setNewCourtType(e.target.value)}
                       >
                         <option value="Clay">🧱 Clay</option>
                         <option value="Hard">🔵 Hard</option>
-                      </select>
+                      </select>}
                       <button type="submit" className="btn btn-primary btn-xs">
                         დამატება
                       </button>
@@ -2469,9 +2554,9 @@ export default function App() {
 
                     {/* Courts list */}
                     <div className="courts-edit-list">
-                      {courts.map(court => (
+                      {departmentCourts.map(court => (
                         <div key={court.id} className="court-edit-item glass-panel">
-                          <span className={`court-type-dot ${court.type === 'Clay' ? 'clay' : 'hard'}`}></span>
+                          <span className={`court-type-dot ${court.type === 'Padel' ? 'padel' : (court.type === 'Clay' ? 'clay' : 'hard')}`}></span>
                           <div className="court-details-col">
                             <strong>{court.name}</strong>
                             <span className="text-xs text-secondary capitalize">{court.type} court</span>
@@ -2503,7 +2588,7 @@ export default function App() {
                 )}
 
                 {/* Court Closures by Date */}
-                {activeDepartment === 'tennis' && (
+                {(activeDepartment === 'tennis' || activeDepartment === 'padel') && (
                   <div className="settings-card glass-panel margin-top-md">
                     <h3>კორტების ჩაკეტვა თარიღებით</h3>
                     <p className="text-xs text-secondary margin-bottom-md">ჩაკეტეთ კორტი კონკრეტულ თარიღზე ღონისძიების ან ტურნირის გამო</p>
@@ -2522,7 +2607,7 @@ export default function App() {
                           >
                             <option value="">აირჩიეთ კორტი</option>
                             <option value="all">ყველა კორტი</option>
-                            {courts.map(c => (
+                            {departmentCourts.map(c => (
                               <option key={c.id} value={c.id}>{c.name}</option>
                             ))}
                           </select>
@@ -2564,10 +2649,11 @@ export default function App() {
 
                     {/* Closures list */}
                     <div className="courts-edit-list" style={{ maxHeight: '220px', overflowY: 'auto' }}>
-                      {courtClosures.length === 0 ? (
+                      {courtClosures.filter(c => departmentCourts.some(court => court.id === c.court_id)).length === 0 ? (
                         <p className="text-xs text-muted padding-xs">აქტიური ჩაკეტვები არ არის</p>
                       ) : (
                         courtClosures
+                          .filter(c => departmentCourts.some(court => court.id === c.court_id))
                           .sort((a, b) => new Date(a.closure_date) - new Date(b.closure_date))
                           .reduce((groups, closure) => {
                             // Group consecutive dates for same court+reason into one row
@@ -2906,7 +2992,7 @@ export default function App() {
           {activeTab === 'analytics' && canSeeAnalytics && (
             <Analytics 
               bookings={bookings}
-              courts={courts}
+              courts={departmentCourts}
               activityLogs={activityLogs}
               activeDepartment={activeDepartment}
             />
@@ -2924,7 +3010,7 @@ export default function App() {
         selectedSlot={selectedSlot}
         existingBooking={selectedBooking}
         currentUser={currentUser}
-        courts={courts}
+        courts={departmentCourts}
         activeDepartment={activeDepartment}
         bookings={bookings}
         globalSettings={globalSettings}
@@ -3502,6 +3588,9 @@ export default function App() {
         .scheduler-court-column-header.hard {
           background: linear-gradient(180deg, rgba(14, 165, 233, 0.08) 0%, transparent 100%);
         }
+        .scheduler-court-column-header.padel {
+          background: linear-gradient(180deg, rgba(13, 148, 136, 0.14) 0%, transparent 100%);
+        }
         
         .court-type-indicator {
           font-size: 0.65rem;
@@ -3512,6 +3601,7 @@ export default function App() {
         }
         .scheduler-court-column-header.clay .court-type-indicator { color: var(--color-clay); }
         .scheduler-court-column-header.hard .court-type-indicator { color: var(--color-hard); }
+        .scheduler-court-column-header.padel .court-type-indicator { color: #5eead4; }
 
         .scheduler-court-column-header h4 {
           font-size: 0.95rem;
@@ -3588,6 +3678,10 @@ export default function App() {
         .scheduler-grid-cell.occupied.cell-hard {
           background: rgba(14, 165, 233, 0.15);
           border-left: 3px solid var(--color-hard);
+        }
+        .scheduler-grid-cell.occupied.cell-padel {
+          background: rgba(13, 148, 136, 0.15);
+          border-left: 3px solid #0d9488;
         }
 
         .scheduler-grid-cell.occupied.blocked {
@@ -3797,6 +3891,7 @@ export default function App() {
         }
         .court-type-dot.clay { background-color: var(--color-clay); }
         .court-type-dot.hard { background-color: var(--color-hard); }
+        .court-type-dot.padel { background-color: #0d9488; }
 
         /* Animations & Helpers */
         .animate-fade-in {
@@ -4020,6 +4115,11 @@ export default function App() {
             background-color: var(--color-hard);
             color: white;
             border-color: var(--color-hard);
+          }
+          .mobile-court-tab-btn.active.padel {
+            background-color: #0d9488;
+            color: white;
+            border-color: #0d9488;
           }
           
           .mobile-court-tab-btn.maintenance-tab {

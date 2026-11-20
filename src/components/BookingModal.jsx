@@ -126,7 +126,7 @@ export default function BookingModal({
     if (existingBooking) {
       setFullName(existingBooking.full_name || '');
       setRoomNumber(existingBooking.room_number || '');
-      setSelectedCourtId(existingBooking.court_id || 1);
+      setSelectedCourtId(existingBooking.court_id || courts[0]?.id || 1);
       // Use slotDate/slotTime if provided by handleSlotClick (already decoded as Georgia local)
       if (selectedSlot?.slotDate && selectedSlot?.slotTime) {
         setStartDate(selectedSlot.slotDate);
@@ -182,7 +182,7 @@ export default function BookingModal({
     } else {
       setFullName('');
       setRoomNumber('');
-      setSelectedCourtId(selectedSlot?.courtId || 1);
+      setSelectedCourtId(selectedSlot?.courtId || courts[0]?.id || 1);
       // Use slotDate/slotTime strings if available (passed directly from calendar click or new button)
       if (selectedSlot?.slotDate && selectedSlot?.slotTime) {
         setStartDate(selectedSlot.slotDate);
@@ -267,6 +267,15 @@ export default function BookingModal({
 
     const endISO = new Date(startMs + actualDuration * 3600000).toISOString();
 
+    if ((activeDepartment === 'tennis' || activeDepartment === 'padel') && !courts.some(c => c.id === selectedCourtId)) {
+      setError('გთხოვთ აირჩიოთ ხელმისაწვდომი კორტი');
+      return;
+    }
+    if ((activeDepartment === 'tennis' || activeDepartment === 'padel') && !isBlocked && racketsStatus === 'rented' && (!Number.isInteger(racketsCount) || racketsCount < 1)) {
+      setError('მიუთითეთ გასაქირავებელი ჩოგნების რაოდენობა');
+      return;
+    }
+
     let cleanNotes = notes || '';
     if (activeDepartment === 'quad') {
       cleanNotes = cleanNotes
@@ -288,7 +297,7 @@ export default function BookingModal({
       start_time: startISO,
       end_time: endISO,
       rackets_status: isBlocked ? 'included' : racketsStatus,
-      rackets_count: isBlocked ? 0 : racketsCount,
+      rackets_count: isBlocked || racketsStatus !== 'rented' ? 0 : racketsCount,
       activity_type: activeDepartment,
       package_name: activeDepartment === 'equestrian' ? packageName : (activeDepartment === 'quad' ? quadPackageName : null),
       horses_count: activeDepartment === 'equestrian' ? horsesCount : (activeDepartment === 'quad' ? quadsCount : 0),
@@ -314,7 +323,7 @@ export default function BookingModal({
         <div className="modal-header">
           <h3>
             {existingBooking ? 'ჯავშნის რედაქტირება' : 'ახალი დაჯავშნა'}
-            {activeDepartment === 'tennis' && (
+            {(activeDepartment === 'tennis' || activeDepartment === 'padel') && (
               <span className="modal-court-badge">
                 {courts.find(c => c.id === selectedCourtId)?.name || `კორტი ${selectedCourtId}`}
               </span>
@@ -338,8 +347,8 @@ export default function BookingModal({
         <form onSubmit={handleSubmit} className="modal-form">
           {error && <div className="form-error">{error}</div>}
 
-          {/* Court Selection (Only for Tennis) */}
-          {activeDepartment === 'tennis' && (
+          {/* Court selection */}
+          {(activeDepartment === 'tennis' || activeDepartment === 'padel') && (
             <div className="form-group">
               <label className="form-label">კორტი</label>
               <select 
@@ -551,8 +560,8 @@ export default function BookingModal({
             </>
           )}
 
-          {/* --- TENNIS SPECIFIC FIELDS --- */}
-          {activeDepartment === 'tennis' && !isBlocked && (
+          {/* Court and racket fields */}
+          {(activeDepartment === 'tennis' || activeDepartment === 'padel') && !isBlocked && (
             <>
               <div className="form-group">
                 <label className="form-label">ხანგრძლივობა</label>
@@ -606,8 +615,8 @@ export default function BookingModal({
             </>
           )}
 
-          {/* Block Court Toggle (Only for managers and super admins, and only Tennis) */}
-          {currentUser?.role !== 'staff' && activeDepartment === 'tennis' && (
+          {/* Block court for managers and admins */}
+          {currentUser?.role !== 'staff' && (activeDepartment === 'tennis' || activeDepartment === 'padel') && (
             <div className="form-group block-toggle-group">
               <label className="checkbox-container">
                 <input 
